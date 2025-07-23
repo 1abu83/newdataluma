@@ -13,9 +13,8 @@ import LimitOrderForm from "./LimitOrderForm"
 import StopLimitOrderForm from "./StopLimitOrderForm"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@solana/wallet-adapter-react"
-import { getAuth } from "firebase/auth"
 import { useEffect, useState } from "react";
-import { getFirestore, doc, getDoc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, onSnapshot } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 
 interface Asset {
@@ -28,11 +27,13 @@ interface TradingFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
   onTrade: (price: number, type: 'buy' | 'sell') => void;
+  solBalance: number | undefined;
+  psngBalance: number | undefined;
 }
 
 const SWAP_FUNCTION_URL = "https://swap-xtgnsf4tla-uc.a.run.app";
 
-export default function TradingForm({ type, selectedAsset, onTrade }: TradingFormProps) {
+export default function TradingForm({ type, selectedAsset, onTrade, solBalance, psngBalance }: TradingFormProps) {
   const assetName = selectedAsset.id.split('/')[0];
   const title = type === 'buy' ? `Buy ${assetName}` : `Sell ${assetName}`;
   const titleClass = type === 'buy' ? 'text-success' : 'text-destructive';
@@ -40,29 +41,7 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
   const { toast } = useToast();
   const [poolReserveSOL, setPoolReserveSOL] = useState<number | undefined>(undefined);
   const [poolReservePSNG, setPoolReservePSNG] = useState<number | undefined>(undefined);
-  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
-  const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
-
-  useEffect(() => {
-    if (!publicKey) return;
-
-    const db = getFirestore(app);
-    const solBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "SOL");
-    const psngBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "PSNG");
-
-    const unsubSol = onSnapshot(solBalanceRef, (doc) => {
-      setSolBalance(doc.exists() ? doc.data().amount : 0);
-    });
-    const unsubPsng = onSnapshot(psngBalanceRef, (doc) => {
-      setPsngBalance(doc.exists() ? doc.data().amount : 0);
-    });
-
-    return () => {
-      unsubSol();
-      unsubPsng();
-    };
-  }, [publicKey]);
-
+  
   useEffect(() => {
     const db = getFirestore(app);
     const poolRef = doc(db, "pools", "PSNG_SOL");

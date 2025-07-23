@@ -14,9 +14,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
-import { fetchRecentSwaps } from '@/lib/firebase';
+import { fetchRecentSwaps, app } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, getAuth } from "firebase/auth";
+import { getFirestore, doc, onSnapshot } from "firebase/firestore";
 
 export interface Asset {
   id: string;
@@ -42,8 +43,11 @@ export default function Home() {
   const [tradeMarkers, setTradeMarkers] = useState<TradeMarker[]>([]);
   const [tradeHistory, setTradeHistory] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
+  const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
 
   const wallet = useWallet();
+  const { publicKey } = wallet;
 
   const handleNewTrade = (price: number, type: 'buy' | 'sell') => {
     const newMarker: TradeMarker = {
@@ -53,7 +57,6 @@ export default function Home() {
     };
     setTradeMarkers(prevMarkers => [...prevMarkers, newMarker]);
   };
-
 
   useEffect(() => {
     async function fetchAssets() {
@@ -85,12 +88,35 @@ export default function Home() {
         console.log("Firebase user logged in:", firebaseUser.uid);
       } else {
         setUser(null);
+        setSolBalance(undefined);
+        setPsngBalance(undefined);
         console.log("Firebase user logged out.");
       }
     });
 
     return () => unsubscribe();
   }, []);
+
+  // Centralized balance listener
+  useEffect(() => {
+    if (user && publicKey) {
+      const db = getFirestore(app);
+      const solBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "SOL");
+      const psngBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "PSNG");
+
+      const unsubSol = onSnapshot(solBalanceRef, (doc) => {
+        setSolBalance(doc.exists() ? doc.data().amount : 0);
+      });
+      const unsubPsng = onSnapshot(psngBalanceRef, (doc) => {
+        setPsngBalance(doc.exists() ? doc.data().amount : 0);
+      });
+
+      return () => {
+        unsubSol();
+        unsubPsng();
+      };
+    }
+  }, [user, publicKey]);
 
 
   useEffect(() => {
@@ -155,7 +181,12 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
-      <WalletSetupDialog isOpen={isWalletSetupOpen} onOpenChange={setWalletSetupOpen} />
+      <WalletSetupDialog 
+        isOpen={isWalletSetupOpen} 
+        onOpenChange={setWalletSetupOpen}
+        solBalance={solBalance}
+        psngBalance={psngBalance}
+      />
       <Header 
         isMarketBarOpen={isMarketBarOpen} 
         onMarketToggle={() => setMarketBarOpen(!isMarketBarOpen)}
@@ -180,8 +211,20 @@ export default function Home() {
           </div>
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 mt-6 px-4 md:px-0">
             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TradingForm type="buy" selectedAsset={selectedAsset} onTrade={handleNewTrade} />
-              <TradingForm type="sell" selectedAsset={selectedAsset} onTrade={handleNewTrade} />
+              <TradingForm 
+                type="buy" 
+                selectedAsset={selectedAsset} 
+                onTrade={handleNewTrade} 
+                solBalance={solBalance}
+                psngBalance={psngBalance}
+              />
+              <TradingForm 
+                type="sell" 
+                selectedAsset={selectedAsset} 
+                onTrade={handleNewTrade}
+                solBalance={solBalance}
+                psngBalance={psngBalance}
+              />
             </div>
             <div className="lg:col-span-2 flex flex-col gap-6">
               <OrderBook selectedAsset={selectedAsset} />

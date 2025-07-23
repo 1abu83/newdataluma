@@ -27,18 +27,18 @@ const LOGIN_OR_SIGNUP_URL = "https://loginorsignup-xtgnsf4tla-uc.a.run.app";
 interface WalletSetupDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
+  solBalance: number | undefined;
+  psngBalance: number | undefined;
 }
 
-export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupDialogProps) {
+export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, psngBalance }: WalletSetupDialogProps) {
   const { publicKey, signMessage, connected } = useWallet();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [depositWallet, setDepositWallet] = useState<string>("");
   const [psngDepositWallet, setPsngDepositWallet] = useState<string>(""); // Should be different in prod
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [solBalance, setSolBalance] = useState<number | null>(null);
-  const [psngBalance, setPsngBalance] = useState<number | null>(null);
-
+  
   const auth = getAuth(app);
   const db = getFirestore(app);
 
@@ -46,10 +46,8 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsLoggedIn(!!user);
       if (user) {
-         fetchBalances(user.uid);
+         fetchDepositAddress(user.uid);
       } else {
-        setSolBalance(null);
-        setPsngBalance(null);
         setDepositWallet("");
         setPsngDepositWallet("");
       }
@@ -57,7 +55,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
     return () => unsubscribe();
   }, [auth]);
 
-  async function fetchBalances(userId: string) {
+  async function fetchDepositAddress(userId: string) {
     try {
       const userDocRef = doc(db, "users", userId);
       const userDoc = await getDoc(userDocRef);
@@ -66,20 +64,8 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
         setDepositWallet(userData.depositWallet || "N/A");
         setPsngDepositWallet(userData.depositWallet || "N/A"); // Demo: using same wallet
       }
-
-      const solBalanceRef = doc(db, "users", userId, "balances", "SOL");
-      const psngBalanceRef = doc(db, "users", userId, "balances", "PSNG");
-
-      onSnapshot(solBalanceRef, (doc) => {
-        setSolBalance(doc.exists() ? doc.data().amount : 0);
-      });
-      onSnapshot(psngBalanceRef, (doc) => {
-        setPsngBalance(doc.exists() ? doc.data().amount : 0);
-      });
     } catch (e) {
-      console.error("Error fetching balances:", e);
-      setSolBalance(null);
-      setPsngBalance(null);
+      console.error("Error fetching deposit address:", e);
     }
   }
 
@@ -153,7 +139,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">Send only native SOL to this address.</p>
-                {solBalance !== null && (
+                {solBalance !== undefined && (
                   <div className="text-xs text-success pt-1 font-semibold">Your Balance: {solBalance.toFixed(4)} SOL</div>
                 )}
               </TabsContent>
@@ -166,7 +152,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">Send only PSNG tokens to this address.</p>
-                {psngBalance !== null && (
+                {psngBalance !== undefined && (
                   <div className="text-xs text-success pt-1 font-semibold">Your Balance: {psngBalance.toFixed(4)} PSNG</div>
                 )}
               </TabsContent>
