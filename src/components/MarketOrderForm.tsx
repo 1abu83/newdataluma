@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { RefreshCw } from "lucide-react";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -39,7 +40,6 @@ interface MarketOrderFormProps {
   psngBalance?: number;
 }
 
-// Sama seperti di WalletSetupDialog
 const PSNG_MINT_ADDRESS = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
 const DETECT_BALANCE_ENDPOINT = "https://detectbalance-xtgnsf4tla-uc.a.run.app";
 
@@ -214,3 +214,5 @@ export default function MarketOrderForm({ type, selectedAsset, solBalance, psngB
     </>
   )
 }
+
+    
