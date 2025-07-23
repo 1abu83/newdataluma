@@ -11,6 +11,13 @@ import {
 } from '@solana/wallet-adapter-solflare';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { clusterApiUrl } from '@solana/web3.js';
+import { initializeApp, getApps } from 'firebase/app';
+import { firebaseConfig } from '@/lib/firebase';
+
+// Initialize Firebase
+if (!getApps().length) {
+  initializeApp(firebaseConfig);
+}
 
 const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
     // Can be set to 'devnet', 'testnet', or 'mainnet-beta'.
