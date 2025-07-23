@@ -169,7 +169,10 @@ export default function Home() {
             { markers: [] as TradeMarker[], history: [] as any[] }
         );
       
-        setTradeMarkers(markers);
+        // Sort markers by time in ascending order before setting state
+        const sortedMarkers = markers.sort((a, b) => a.time - b.time);
+        setTradeMarkers(sortedMarkers);
+
         setTradeHistory(history);
     });
 
