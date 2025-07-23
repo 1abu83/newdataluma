@@ -69,8 +69,9 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
       return;
     }
     
-    // NOTE: Backend currently doesn't support true limit orders. 
-    // It treats this as a market order. For a buy, we send the total SOL value.
+    // NOTE: Backend currently treats this as a market order. 
+    // For a buy, we send the total SOL value. For a sell, we send the token amount.
+    // This logic mimics a market buy with a limit on price, but the backend doesn't enforce the limit yet.
     const amountToSend = type === 'buy' ? (amount * (price || 0)) : amount;
     
     if (amountToSend <= 0) {
@@ -86,7 +87,9 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
         body: JSON.stringify({
           userId: publicKey.toBase58(),
           direction: type,
-          amount: amountToSend
+          // The backend expects `amount` to be the input amount.
+          // For a buy, this is SOL. For a sell, this is PSNG.
+          amount: amountToSend 
         })
       });
       const data = await response.json();

@@ -129,17 +129,19 @@ export default function Home() {
             }
 
             let date;
+            // Handle Firebase Timestamp object
             if (s.timestamp && typeof s.timestamp.toDate === 'function') {
               date = s.timestamp.toDate();
             } else {
-              date = new Date(s.timestamp);
+               // Fallback for number or other formats
+              date = new Date(s.timestamp || Date.now());
             }
              
             // This will throw an error for invalid dates, which the catch block will handle.
             const isoDateString = date.toISOString(); 
             const unixTimestamp = Math.floor(date.getTime() / 1000);
 
-            // Price calculation based on direction and ensure it's a number
+            // Price calculation and conversion from string to number
             const price = parseFloat(s.exchangeRate) || (s.direction === 'buy' 
               ? (s.amountIn / (s.amountOut || 1)) 
               : (s.amountOut / (s.amountIn || 1)));
@@ -156,7 +158,7 @@ export default function Home() {
               date: isoDateString,
               pair: 'PSNG/SOL',
               type: s.direction === 'buy' ? 'Buy' : 'Sell',
-              price: price,
+              price: price, // Ensure price is a number
               amount: amount,
               total: s.amountIn,
             });
