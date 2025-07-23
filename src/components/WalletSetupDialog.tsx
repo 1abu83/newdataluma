@@ -24,6 +24,9 @@ import { app } from "@/lib/firebase";
 const GENERATE_CHALLENGE_URL = "https://generatechallenge-xtgnsf4tla-uc.a.run.app";
 const VERIFY_SIGNATURE_URL = "https://verifysignatureandlogin-xtgnsf4tla-uc.a.run.app";
 
+function bufferToBase64(buffer: Uint8Array): string {
+    return btoa(String.fromCharCode.apply(null, Array.from(buffer)));
+}
 
 interface WalletSetupDialogProps {
   isOpen: boolean;
@@ -79,7 +82,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   }
 
   const handleCopyAddress = (address: string, token: string) => {
-    if (!address || address.includes("...")) {
+    if (!address || address.includes("...") || address.includes("N/A")) {
       toast({
         variant: "destructive",
         title: "Address Not Available",
@@ -107,15 +110,13 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ walletAddress: publicKey.toBase58() })
       });
+      if (!challengeResponse.ok) throw new Error('Failed to get challenge');
       const { challenge } = await challengeResponse.json();
-      if (!challengeResponse.ok) throw new Error("Failed to get challenge");
-
+      
       // 2. Sign challenge
       const message = new TextEncoder().encode(challenge);
       const signatureBytes = await signMessage(message);
-      
-      const { default: bs58 } = await import('bs58');
-      const signature = bs58.encode(signatureBytes);
+      const signatureBase64 = bufferToBase64(signatureBytes);
 
       // 3. Verify signature and get custom token
       const verifyResponse = await fetch(VERIFY_SIGNATURE_URL, {
@@ -123,7 +124,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           walletAddress: publicKey.toBase58(),
-          signature,
+          signature: signatureBase64,
           challenge
         }),
       });
@@ -171,7 +172,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
               <TabsContent value="sol" className="pt-4 space-y-2">
                 <Label htmlFor="sol-deposit-address">SOL Deposit Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input id="sol-deposit-address" value={depositWallet} readOnly />
+                  <Input id="sol-deposit-address" value={depositWallet || 'N/A'} readOnly />
                   <Button variant="outline" size="icon" onClick={() => handleCopyAddress(depositWallet, 'SOL')}>
                     <Copy className="h-4 w-4" />
                   </Button>
@@ -184,7 +185,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
               <TabsContent value="psng" className="pt-4 space-y-2">
                 <Label htmlFor="psng-deposit-address">PSNG Deposit Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input id="psng-deposit-address" value={psngDepositWallet} readOnly />
+                  <Input id="psng-deposit-address" value={psngDepositWallet || 'N/A'} readOnly />
                   <Button variant="outline" size="icon" onClick={() => handleCopyAddress(psngDepositWallet, 'PSNG')}>
                     <Copy className="h-4 w-4" />
                   </Button>
@@ -207,3 +208,5 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     </Dialog>
   );
 }
+
+    

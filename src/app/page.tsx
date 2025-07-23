@@ -14,10 +14,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
-import { fetchRecentSwaps, app } from '@/lib/firebase';
+import { app } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
 import { onAuthStateChanged, getAuth } from "firebase/auth";
-import { getFirestore, doc, onSnapshot } from "firebase/firestore";
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
 
 export interface Asset {
   id: string;
@@ -81,7 +81,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const auth = getAuth();
+    const auth = getAuth(app);
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         setUser(firebaseUser);
@@ -125,29 +125,44 @@ export default function Home() {
   }, [selectedAsset]);
 
 
-  // Fetch swap/trade data from Firestore
+  // Fetch swap/trade data from Firestore in real-time
   useEffect(() => {
-    async function fetchSwaps() {
-      const swaps = await fetchRecentSwaps(50);
-      // Only for PSNG/SOL pair (if needed, filter here)
-      const filtered = swaps.filter(s => s.direction && (s.direction === 'buy' || s.direction === 'sell'));
-      // For chart markers
-      setTradeMarkers(filtered.map(s => ({
-        time: Math.floor((s.timestamp?.seconds || Date.now()/1000)),
-        price: Number(s.exchangeRate),
-        type: s.direction
-      })));
-      // For order history
-      setTradeHistory(filtered.map(s => ({
-        date: new Date(s.timestamp?.seconds ? s.timestamp.seconds * 1000 : s.timestamp || Date.now()).toISOString(),
-        pair: 'PSNG/SOL',
-        type: s.direction === 'buy' ? 'Buy' : 'Sell',
-        price: Number(s.exchangeRate),
-        amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
-        total: s.amountIn || 0
-      })));
-    }
-    fetchSwaps();
+    const db = getFirestore(app);
+    const swapsQuery = query(
+      collection(db, "swaps"),
+      orderBy("timestamp", "desc"),
+      limit(50)
+    );
+
+    const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
+      const swaps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      // Map to trade history format
+      const history = swaps.map(s => {
+        const price = s.amountIn > 0 ? s.amountOut / s.amountIn : 0;
+        return {
+          date: new Date(s.timestamp || Date.now()).toISOString(),
+          pair: 'PSNG/SOL',
+          type: s.direction === 'buy' ? 'Buy' : 'Sell',
+          price: price,
+          amount: s.direction === 'buy' ? s.amountOut : s.amountIn,
+          total: s.direction === 'buy' ? s.amountIn : s.amountOut,
+        };
+      });
+      setTradeHistory(history);
+
+      // Map to trade markers for the chart
+      const markers = swaps
+        .filter(s => s.direction && s.amountIn > 0)
+        .map(s => ({
+          time: Math.floor((s.timestamp || Date.now()) / 1000),
+          price: s.amountOut / s.amountIn,
+          type: s.direction as 'buy' | 'sell',
+        }));
+      setTradeMarkers(markers);
+    });
+
+    return () => unsubscribe(); // Cleanup listener on unmount
   }, []);
 
 
@@ -237,3 +252,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

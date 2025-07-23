@@ -25,31 +25,6 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-/**
- * Fetch recent swaps (trades) from Firestore, ordered by timestamp descending.
- * @param {number} maxCount - Maximum number of swaps to fetch (default 50)
- * @returns {Promise<any[]>} Array of swap objects
- */
-export async function fetchRecentSwaps(maxCount = 50) {
-  try {
-    const swapsQuery = query(
-      collection(db, "swaps"),
-      orderBy("timestamp", "desc"),
-      limit(maxCount)
-    );
-    const snapshot = await getDocs(swapsQuery);
-    return snapshot.docs.map(doc => {
-        const data = doc.data();
-        // Ensure timestamp is serializable
-        if (data.timestamp instanceof Timestamp) {
-            return { ...data, timestamp: data.timestamp.toDate().getTime() };
-        }
-        return data;
-    });
-  } catch (error) {
-    console.error("Error fetching recent swaps:", error);
-    return [];
-  }
-}
+export { app, db, auth, onAuthStateChanged, FirebaseError };
 
-export { app, db, auth, onAuthStateChanged };
+    

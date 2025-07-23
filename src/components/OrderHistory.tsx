@@ -24,7 +24,7 @@ type Trade = {
   date: string;
   pair: string;
   type: 'Buy' | 'Sell';
-  price: number | string;
+  price: number; // Changed to number
   amount: number;
   total: number;
 };
@@ -70,3 +70,5 @@ export default function OrderHistory({ selectedAsset, tradeHistory }: OrderHisto
     </Card>
   )
 }
+
+    
