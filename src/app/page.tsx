@@ -130,17 +130,27 @@ export default function Home() {
       
       const processTimestamp = (timestamp: any): number => {
         if (!timestamp) return Date.now();
-        // Firestore timestamp object has toDate() method
+        // Case 1: Firestore Timestamp object
         if (typeof timestamp.toDate === 'function') {
           return timestamp.toDate().getTime();
         }
-        // Handle numeric timestamp (milliseconds)
+        // Case 2: JavaScript Date object (less likely but possible)
+        if (timestamp instanceof Date) {
+          return timestamp.getTime();
+        }
+        // Case 3: Number (milliseconds since epoch)
         if (typeof timestamp === 'number') {
           return timestamp;
         }
-        // Fallback for string or other types, though less ideal
-        const parsed = Date.parse(timestamp);
-        return isNaN(parsed) ? Date.now() : parsed;
+        // Case 4: String (ISO or other parsable format)
+        if (typeof timestamp === 'string') {
+          const parsed = Date.parse(timestamp);
+          if (!isNaN(parsed)) {
+            return parsed;
+          }
+        }
+        // Fallback for any other unexpected type
+        return Date.now();
       };
 
       // For chart markers
