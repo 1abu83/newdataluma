@@ -119,61 +119,58 @@ export default function Home() {
     const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
     
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-      const { markers, history } = snapshot.docs.reduce(
-        (acc, sDoc) => {
-          const s = sDoc.data();
-          try {
-            // Check for necessary fields first
-            if (!s.timestamp || !s.direction || typeof s.amountIn !== 'number' || typeof s.amountOut !== 'number') {
-              return acc;
-            }
+        // Filter out documents that have pending writes to avoid processing incomplete data
+        const docsWithTimestamp = snapshot.docs.filter(doc => !doc.metadata.hasPendingWrites);
 
-            let date;
-            // Handle Firebase Timestamp object
-            if (s.timestamp && typeof s.timestamp.toDate === 'function') {
-              date = s.timestamp.toDate();
-            } else {
-               // Fallback for number or other formats
-              date = new Date(s.timestamp || Date.now());
-            }
-             
-            // This will throw an error for invalid dates, which the catch block will handle.
-            const isoDateString = date.toISOString(); 
-            const unixTimestamp = Math.floor(date.getTime() / 1000);
+        const { markers, history } = docsWithTimestamp.reduce(
+            (acc, sDoc) => {
+                const s = sDoc.data();
+                try {
+                    // This check is now more robust.
+                    if (!s.timestamp || !s.direction) {
+                        return acc;
+                    }
 
-            // Price calculation and conversion from string to number
-            const price = parseFloat(s.exchangeRate) || (s.direction === 'buy' 
-              ? (s.amountIn / (s.amountOut || 1)) 
-              : (s.amountOut / (s.amountIn || 1)));
-            
-            const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
+                    // Safely convert timestamp
+                    const date = s.timestamp.toDate(); 
+                    const isoDateString = date.toISOString();
+                    const unixTimestamp = Math.floor(date.getTime() / 1000);
 
-            acc.markers.push({
-              time: unixTimestamp,
-              price: price,
-              type: s.direction
-            });
+                    // Safely parse price, defaulting to calculated if not present
+                    const price = s.exchangeRate 
+                      ? parseFloat(s.exchangeRate) 
+                      : (s.direction === 'buy' ? (s.amountIn / s.amountOut) : (s.amountOut / s.amountIn));
 
-            acc.history.push({
-              date: isoDateString,
-              pair: 'PSNG/SOL',
-              type: s.direction === 'buy' ? 'Buy' : 'Sell',
-              price: price, // Ensure price is a number
-              amount: amount,
-              total: s.amountIn,
-            });
+                    if (isNaN(price)) return acc; // Skip if price is not a number
 
-          } catch (error) {
-            // Safely ignore the record if any processing fails
-            console.warn('Skipping swap record due to processing error:', s, error);
-          }
-          return acc;
-        },
-        { markers: [] as TradeMarker[], history: [] as any[] }
-      );
+                    const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
+                    
+                    acc.markers.push({
+                        time: unixTimestamp,
+                        price: price,
+                        type: s.direction
+                    });
+
+                    acc.history.push({
+                        date: isoDateString,
+                        pair: 'PSNG/SOL',
+                        type: s.direction === 'buy' ? 'Buy' : 'Sell',
+                        price: price,
+                        amount: amount,
+                        total: s.amountIn,
+                    });
+
+                } catch (error) {
+                    // This will catch any other unforseen errors during processing
+                    console.warn('Skipping a swap record due to processing error:', s, error);
+                }
+                return acc;
+            },
+            { markers: [] as TradeMarker[], history: [] as any[] }
+        );
       
-      setTradeMarkers(markers);
-      setTradeHistory(history);
+        setTradeMarkers(markers);
+        setTradeHistory(history);
     });
 
     return () => unsubscribe();
