@@ -125,47 +125,45 @@ export default function Home() {
   useEffect(() => {
     async function fetchSwaps() {
       const swaps = await fetchRecentSwaps(50);
-      const filtered = swaps.filter(s => s.direction && (s.direction === 'buy' || s.direction === 'sell'));
-      filtered.reverse(); // ASCENDING by time
       
-      const processTimestamp = (timestamp: any): number => {
-        if (!timestamp) return Date.now();
+      const processTimestamp = (timestamp: any): number | null => {
+        if (!timestamp) return null;
         // Case 1: Firestore Timestamp object
         if (typeof timestamp.toDate === 'function') {
           return timestamp.toDate().getTime();
         }
-        // Case 2: JavaScript Date object (less likely but possible)
-        if (timestamp instanceof Date) {
-          return timestamp.getTime();
-        }
-        // Case 3: Number (milliseconds since epoch)
+        // Case 2: Number (milliseconds since epoch)
         if (typeof timestamp === 'number') {
           return timestamp;
         }
-        // Case 4: String (ISO or other parsable format)
+        // Case 3: String that can be parsed
         if (typeof timestamp === 'string') {
           const parsed = Date.parse(timestamp);
-          if (!isNaN(parsed)) {
-            return parsed;
-          }
+          if (!isNaN(parsed)) return parsed;
         }
-        // Fallback for any other unexpected type
-        return Date.now();
+        // If all else fails, it's an invalid format
+        return null;
       };
 
+      const validSwaps = swaps.filter(s => {
+        const time = processTimestamp(s.timestamp);
+        // Ensure timestamp is valid and other necessary fields exist
+        return time !== null && s.direction && typeof s.amountIn === 'number' && typeof s.amountOut === 'number';
+      });
+
       // For chart markers
-      setTradeMarkers(filtered.map(s => ({
-        time: Math.floor(processTimestamp(s.timestamp) / 1000),
-        price: s.direction === 'buy' ? (s.amountIn / (s.amountOut || 1)) : (s.amountOut / (s.amountIn || 1)),
+      setTradeMarkers(validSwaps.map(s => ({
+        time: Math.floor(processTimestamp(s.timestamp)! / 1000),
+        price: s.amountIn / s.amountOut,
         type: s.direction
       })));
 
       // For order history
-      setTradeHistory(filtered.map(s => ({
-        date: new Date(processTimestamp(s.timestamp)).toISOString(),
+      setTradeHistory(validSwaps.map(s => ({
+        date: new Date(processTimestamp(s.timestamp)!).toISOString(),
         pair: 'PSNG/SOL',
         type: s.direction === 'buy' ? 'Buy' : 'Sell',
-        price: s.direction === 'buy' ? (s.amountIn / (s.amountOut || 1)) : (s.amountOut / (s.amountIn || 1)),
+        price: s.amountIn / s.amountOut,
         amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
         total: s.amountIn || 0
       })));
@@ -214,8 +212,6 @@ export default function Home() {
       <WalletSetupDialog 
         isOpen={isWalletSetupOpen} 
         onOpenChange={setWalletSetupOpen}
-        solBalance={solBalance}
-        psngBalance={psngBalance} 
       />
       <Header 
         isMarketBarOpen={isMarketBarOpen} 
