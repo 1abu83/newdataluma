@@ -126,8 +126,8 @@ export default function Home() {
             (acc, sDoc) => {
                 const s = sDoc.data();
                 try {
-                    // This check is now more robust.
-                    if (!s.timestamp || !s.direction) {
+                    // This check is now more robust. It ensures timestamp exists and has the toDate method.
+                    if (!s.timestamp || typeof s.timestamp.toDate !== 'function') {
                         return acc;
                     }
 
