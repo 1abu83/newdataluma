@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { RefreshCw } from "lucide-react";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 
 import { Button } from "@/components/ui/button"
@@ -74,8 +75,16 @@ export default function StopLimitOrderForm({ type, selectedAsset, solBalance, ps
         toast({ variant: "destructive", title: "Error", description: "Please connect your wallet." });
         return;
     }
-    const userDoc = (await (await fetch(`https://firestore.googleapis.com/v1/projects/tradeflow-f12a9/databases/(default)/documents/users/${publicKey.toBase58()}`)).json());
-    const depositWallet = userDoc?.fields?.depositWallet?.stringValue;
+    const db = getFirestore();
+    const userDocRef = doc(db, "users", publicKey.toBase58());
+    const userDoc = await getDoc(userDocRef);
+
+    if (!userDoc.exists()) {
+       toast({ variant: "destructive", title: "Error", description: "User document not found." });
+       return;
+    }
+
+    const depositWallet = userDoc.data().depositWallet;
     if (!depositWallet) {
        toast({ variant: "destructive", title: "Error", description: "Deposit wallet not found. Please re-login." });
        return;

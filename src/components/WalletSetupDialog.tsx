@@ -237,4 +237,3 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
     </Dialog>
   );
 }
-
