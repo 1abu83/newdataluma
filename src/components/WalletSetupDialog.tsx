@@ -21,8 +21,9 @@ import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/aut
 import { getFirestore, doc, onSnapshot, getDoc } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 
+const GENERATE_CHALLENGE_URL = "https://generatechallenge-xtgnsf4tla-uc.a.run.app";
+const VERIFY_SIGNATURE_URL = "https://verifysignatureandlogin-xtgnsf4tla-uc.a.run.app";
 
-const LOGIN_OR_SIGNUP_URL = "https://loginorsignup-xtgnsf4tla-uc.a.run.app";
 
 interface WalletSetupDialogProps {
   isOpen: boolean;
@@ -36,7 +37,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [depositWallet, setDepositWallet] = useState<string>("");
-  const [psngDepositWallet, setPsngDepositWallet] = useState<string>(""); // Should be different in prod
+  const [psngDepositWallet, setPsngDepositWallet] = useState<string>("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   
   const auth = getAuth(app);
@@ -69,7 +70,6 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     }
   }
 
-
   const handleCopyAddress = (address: string, token: string) => {
     navigator.clipboard.writeText(address);
     toast({
@@ -79,20 +79,44 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   };
 
   const handleLoginWithWallet = async () => {
-    if (!publicKey) {
-      toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
+    if (!publicKey || !signMessage) {
+      toast({ title: "Wallet not connected or signMessage not available", description: "Please connect your wallet first." });
       return;
     }
     setLoading(true);
     try {
-      const response = await fetch(LOGIN_OR_SIGNUP_URL, {
+      // 1. Get challenge
+      const challengeResponse = await fetch(GENERATE_CHALLENGE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ walletAddress: publicKey.toBase58() })
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to login/signup");
+      const { challenge } = await challengeResponse.json();
+      if (!challengeResponse.ok) throw new Error("Failed to get challenge");
 
+      // 2. Sign challenge
+      const message = new TextEncoder().encode(challenge);
+      const signatureBytes = await signMessage(message);
+      
+      // Convert signature to Base58
+      const { default: bs58 } = await import('bs58');
+      const signature = bs58.encode(signatureBytes);
+
+      // 3. Verify signature and login
+      const verifyResponse = await fetch(VERIFY_SIGNATURE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          walletAddress: publicKey.toBase58(),
+          signature,
+          challenge
+        }),
+      });
+
+      const data = await verifyResponse.json();
+      if (!verifyResponse.ok) throw new Error(data.error || "Failed to verify signature");
+
+      // 4. Sign in with custom token
       await signInWithCustomToken(auth, data.customToken);
       
       setDepositWallet(data.user.depositWallet || "");
@@ -100,6 +124,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
       toast({ title: "Login Success", description: "Wallet authenticated and deposit address loaded." });
 
     } catch (e: any) {
+      console.error(e);
       toast({ variant: "destructive", title: "Login Failed", description: e.message || String(e) });
     } finally {
       setLoading(false);
