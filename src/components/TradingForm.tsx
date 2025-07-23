@@ -118,10 +118,23 @@ export default function TradingForm({ type, selectedAsset, onTrade, solBalance, 
             />
           </TabsContent>
           <TabsContent value="market" className="pt-4">
-            <MarketOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} onSwap={handleSwap} />
+            <MarketOrderForm 
+              type={type} 
+              selectedAsset={selectedAsset} 
+              onTrade={onTrade} 
+              onSwap={handleSwap}
+              solBalance={solBalance}
+              psngBalance={psngBalance} 
+            />
           </TabsContent>
           <TabsContent value="stop-limit" className="pt-4">
-            <StopLimitOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} />
+            <StopLimitOrderForm 
+              type={type} 
+              selectedAsset={selectedAsset} 
+              onTrade={onTrade}
+              solBalance={solBalance}
+              psngBalance={psngBalance} 
+            />
           </TabsContent>
           <TabsContent value="trailing-stop" className="pt-4">
             {/* Trailing Stop Form will go here */}
