@@ -14,7 +14,7 @@ import { clusterApiUrl } from '@solana/web3.js';
 
 const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
     // Can be set to 'devnet', 'testnet', or 'mainnet-beta'.
-    const network = WalletAdapterNetwork.Mainnet;
+    const network = WalletAdapterNetwork.Devnet;
 
     // You can also provide a custom RPC endpoint.
     const endpoint = useMemo(() => clusterApiUrl(network), [network]);
@@ -24,7 +24,7 @@ const WalletContextProvider: FC<{ children: ReactNode }> = ({ children }) => {
             new PhantomWalletAdapter(),
             new SolflareWalletAdapter(),
         ],
-        []
+        [network]
     );
 
     return (
