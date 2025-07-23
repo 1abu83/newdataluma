@@ -43,7 +43,7 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
       if (!selectedAsset) return;
 
       let isMounted = true;
-      const intervalId = setInterval(async () => {
+      const fetchOrderBook = async () => {
         try {
           const response = await fetch(`/api/market-data?type=assetData&assetId=${selectedAsset.id}`);
           if (!response.ok) {
@@ -58,13 +58,13 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
           console.error(error);
           if (isMounted && loading) setLoading(false);
         }
-      }, 2000); // Fetch data every 2 seconds
-
+      };
+      fetchOrderBook();
+      // Hapus interval polling
       return () => {
         isMounted = false;
-        clearInterval(intervalId);
       };
-    }, [selectedAsset, loading]);
+    }, [selectedAsset]);
 
     if (loading || !orderBookData) {
         return (

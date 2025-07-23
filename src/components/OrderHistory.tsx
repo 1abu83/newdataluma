@@ -31,52 +31,10 @@ type Trade = {
 
 interface OrderHistoryProps {
     selectedAsset: Asset;
+    tradeHistory: Trade[];
 }
 
-export default function OrderHistory({ selectedAsset }: OrderHistoryProps) {
-    const [tradeHistory, setTradeHistory] = useState<Trade[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!selectedAsset) return;
-        
-        let isMounted = true;
-        const intervalId = setInterval(async () => {
-            try {
-                const response = await fetch(`/api/market-data?type=assetData&assetId=${selectedAsset.id}`);
-                if (!response.ok) {
-                    throw new Error('Failed to fetch trade history');
-                }
-                const data = await response.json();
-                if (isMounted) {
-                    setTradeHistory(data.tradeHistory);
-                    if (loading) setLoading(false);
-                }
-            } catch (error) {
-                console.error(error);
-                if(isMounted && loading) setLoading(false);
-            }
-        }, 2000); // Fetch every 2 seconds
-
-        return () => {
-            isMounted = false;
-            clearInterval(intervalId);
-        }
-
-    }, [selectedAsset, loading]);
-
-    if (loading) {
-        return (
-            <Card>
-                <CardHeader>
-                    <CardTitle>Trade History</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Skeleton className="h-80 w-full" />
-                </CardContent>
-            </Card>
-        )
-    }
+export default function OrderHistory({ selectedAsset, tradeHistory }: OrderHistoryProps) {
 
   return (
     <Card>

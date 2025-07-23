@@ -5,6 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { cn } from "@/lib/utils"
+import { useState } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -32,9 +34,10 @@ interface MarketOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
   onTrade: (price: number, type: 'buy' | 'sell') => void;
+  onSwap?: (amount: number) => Promise<void>;
 }
 
-export default function MarketOrderForm({ type, selectedAsset, onTrade }: MarketOrderFormProps) {
+export default function MarketOrderForm({ type, selectedAsset, onTrade, onSwap }: MarketOrderFormProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -44,39 +47,89 @@ export default function MarketOrderForm({ type, selectedAsset, onTrade }: Market
   })
 
   const assetName = selectedAsset.id.split('/')[0];
+  const [loadingModal, setLoadingModal] = useState(false);
+  const [amountInput, setAmountInput] = useState('');
+  const FEE = 0.02;
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
-    toast({
-      title: "Market Order Submitted",
-      description: `Your market ${type} order for ${data.amount} ${assetName} has been placed.`,
-    })
-    // For a market order, we use the current asset price for the marker
-    onTrade(selectedAsset.price, type);
-    form.reset()
+  // Estimasi jumlah yang didapat
+  let estimatedReceived = null;
+  if (amountInput) {
+    const amount = Number(amountInput);
+    if (!isNaN(amount) && amount > 0) {
+      if (type === 'buy') {
+        // Buy: user isi amount SOL, dapat PSNG
+        const price = selectedAsset.price;
+        estimatedReceived = (amount / price) * (1 - FEE);
+      } else {
+        // Sell: user isi amount PSNG, dapat SOL
+        const price = selectedAsset.price;
+        estimatedReceived = amount * price * (1 - FEE);
+      }
+    }
+  }
+
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (onSwap) {
+      setLoadingModal(true);
+      const loadingTimeout = setTimeout(() => setLoadingModal(false), 5000);
+      try {
+        await onSwap(Number(data.amount));
+      } finally {
+        clearTimeout(loadingTimeout);
+        setLoadingModal(false);
+      }
+    } else {
+      onTrade(selectedAsset.price, type);
+    }
+    form.reset();
+    setAmountInput('');
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="amount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Amount ({assetName})</FormLabel>
-              <FormControl>
-                <Input placeholder="0.00000" type="number" step="0.00001" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <div className="pt-2">
-           <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
-              {type === 'buy' ? `Buy ${assetName} at Market` : `Sell ${assetName} at Market`}
-            </Button>
-        </div>
-      </form>
-    </Form>
+    <>
+      <Dialog open={loadingModal}>
+        <DialogContent className="flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
+        </DialogContent>
+      </Dialog>
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Amount ({type === 'buy' ? 'SOL' : assetName})</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="0.00000"
+                    type="number"
+                    step="0.00001"
+                    {...field}
+                    value={amountInput}
+                    onChange={e => {
+                      field.onChange(e);
+                      setAmountInput(e.target.value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+                {amountInput && estimatedReceived !== null && (
+                  <div className="text-xs text-primary pt-1 font-semibold">
+                    Estimated {type === 'buy' ? assetName : 'SOL'} received: {estimatedReceived.toFixed(6)}
+                  </div>
+                )}
+              </FormItem>
+            )}
+          />
+          <div className="pt-2">
+             <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
+                {type === 'buy' ? `Buy ${assetName} at Market` : `Sell ${assetName} at Market`}
+              </Button>
+          </div>
+        </form>
+      </Form>
+    </>
   )
 }

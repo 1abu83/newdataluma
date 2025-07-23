@@ -103,14 +103,11 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
     };
     
     fetchData();
-    
-    const intervalId = setInterval(fetchData, 2000);
-
+    // Hapus interval polling
     return () => {
         isMounted = false;
-        clearInterval(intervalId);
     };
-  }, [selectedAsset, activeTimeframe, loading]);
+  }, [selectedAsset, activeTimeframe]);
 
   useEffect(() => {
     if (loading || !chartContainerRef.current || chartData.length === 0) return;

@@ -47,10 +47,9 @@ export default function MarketBar({ isOpen }: MarketBarProps) {
     };
 
     fetchAssets();
-    const intervalId = setInterval(fetchAssets, 5000); // Refresh every 5 seconds
-
-    return () => clearInterval(intervalId);
-  }, [loading]);
+    // Hapus interval polling
+    return () => {};
+  }, []);
 
   return (
     <div

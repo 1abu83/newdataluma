@@ -1,11 +1,15 @@
 
 import { NextResponse } from 'next/server';
 
+// This is a simplified backend for demonstration purposes.
+// In a real application, this data would come from a real-time database,
+// blockchain data, or a dedicated market data provider.
+
 // Initial state for our assets
 let assets = [
   { 
     id: 'PSNG/SOL', 
-    name: 'Psng',
+    name: 'Pasino',
     icon: {
       src: "/psng.png",
       alt: "Pasino logo"
@@ -65,222 +69,97 @@ type Candlestick = {
   close: number;
 };
 
-// Use a map to store data for different timeframes
+// Store chart data in memory
 let priceChartData: Map<string, Candlestick[]> = new Map();
+let lastGeneratedTime: Map<string, number> = new Map();
 
-function initializeChartData() {
+function generateCandlestickData(assetId: string, timeframeMinutes: number): Candlestick[] {
+    const asset = assets.find(a => a.id === assetId);
+    if (!asset) return [];
+
+    const timeframeSeconds = timeframeMinutes * 60;
     const now = Math.floor(Date.now() / 1000);
-    const initialPrice = assets.find(a => a.id === 'PSNG/SOL')?.price || 0.135;
+    const data: Candlestick[] = [];
+    
+    // Start from 200 periods before the last generated time or now
+    const startTime = (lastGeneratedTime.get(assetId) || now) - (200 * timeframeSeconds);
 
-    ['1', '5', '15', '30', '60', '240', '1440'].forEach(tfString => {
-        const timeframeMinutes = parseInt(tfString);
-        const timeframeSeconds = timeframeMinutes * 60;
-        const data: Candlestick[] = [];
-        let currentPrice = initialPrice * (0.9 + Math.random() * 0.1); // Start slightly lower
-        
-        // Start from 200 candles ago
-        let currentTime = now - (200 * timeframeSeconds);
+    let currentPrice = asset.price;
+    let currentTime = Math.floor(startTime / timeframeSeconds) * timeframeSeconds;
 
-        for (let i = 0; i < 200; i++) {
-            const candleTime = Math.floor(currentTime / timeframeSeconds) * timeframeSeconds;
-            const open = currentPrice;
-            const fluctuation = (Math.random() - 0.49); // Base random fluctuation
-            let close = open * (1 + fluctuation * 0.01);
-            const high = Math.max(open, close) * (1 + Math.random() * 0.005);
-            const low = Math.min(open, close) * (1 - Math.random() * 0.005);
-            
-            data.push({ time: candleTime, open, high, low, close });
-            
-            currentPrice = close;
-            currentTime += timeframeSeconds;
-        }
-        priceChartData.set(tfString, data);
-    });
+    for (let i = 0; i < 200; i++) {
+        const open = currentPrice;
+        const close = open + (Math.random() - 0.5) * (open * 0.05); // 5% volatility
+        const high = Math.max(open, close) + Math.random() * (open * 0.02);
+        const low = Math.min(open, close) - Math.random() * (open * 0.02);
+
+        data.push({ time: currentTime, open, high, low, close });
+
+        currentPrice = close;
+        currentTime += timeframeSeconds;
+    }
+    
+    lastGeneratedTime.set(assetId, now);
+    priceChartData.set(`${assetId}-${timeframeMinutes}`, data);
+    return data;
 }
 
-
-let orderBookData: { bids: any[]; asks: any[] } = {
-  bids: [],
-  asks: [],
+type Order = {
+    price: number;
+    amount: number;
+    total: number;
 };
 
-let tradeHistoryData: any[] = [];
-
-let lastSimulationTime = Date.now();
-const SIMULATION_TICK_RATE = 1000; // 1 second
-
-// --- Market Simulation Logic ---
-
-function simulateMarketActivity() {
-  const now = Date.now();
-  const timeSinceLastRun = now - lastSimulationTime;
-  if (timeSinceLastRun < SIMULATION_TICK_RATE) return;
-
-  let psngAsset = assets.find(a => a.id === 'PSNG/SOL');
-  if (!psngAsset) return;
-
-  const initialPrice = priceChartData.get('5')?.[0]?.open ?? psngAsset.price;
-  let lastClose = psngAsset.price;
-
-  const ticksToSimulate = Math.floor(timeSinceLastRun / SIMULATION_TICK_RATE);
-  
-  // --- Start of Bullish Trend Logic ---
-  const TARGET_PRICE = 0.25; // The price we want to trend towards
-  // --- End of Bullish Trend Logic ---
-
-
-  for (let i = 0; i < ticksToSimulate; i++) {
-     if (Math.random() > 0.4) {
-        const tradeType = Math.random() > 0.5 ? 'Buy' : 'Sell';
+// Generates a more realistic order book based on CLAMM principles
+function generateClammOrders(currentPrice: number, depth: number = 20): { bids: Order[], asks: Order[] } {
+    const bids: Order[] = [];
+    const asks: Order[] = [];
+    
+    // Concentrate liquidity around the current price
+    for (let i = 1; i <= depth; i++) {
+        const priceSpread = currentPrice * 0.005 * i; // Bids decrease, asks increase
+        const amountJitter = Math.random() * 0.5 + 0.75; // 75% to 125% of base
         
-        // --- Modified Fluctuation Logic ---
-        const priceDifference = TARGET_PRICE - lastClose;
-        // The closer to the target, the weaker the upward pull. Max pull is 0.1
-        const upwardDrift = Math.min(Math.max(priceDifference * 0.1, 0), 0.1); 
-        // Base random fluctuation is now biased by the upwardDrift
-        const randomFluctuation = (Math.random() - (0.5 - upwardDrift)) * 0.01;
-        
-        let newPrice = lastClose * (1 + randomFluctuation);
-        newPrice = Math.max(0.01, newPrice); // Ensure price doesn't go to zero
-        
-        const amount = Math.random() * 2000 + 50; 
-        const total = newPrice * amount;
-        const tradeTime = new Date(lastSimulationTime + (i + 1) * SIMULATION_TICK_RATE);
+        // Bids (people wanting to buy) are below current price
+        const bidPrice = parseFloat((currentPrice - priceSpread).toFixed(4));
+        const bidAmount = parseFloat(((depth - i + 1) * 5 * amountJitter).toFixed(2));
+        bids.push({ price: bidPrice, amount: bidAmount, total: parseFloat((bidPrice * bidAmount).toFixed(2)) });
 
-        tradeHistoryData.unshift({
-          date: tradeTime.toISOString(),
-          pair: 'PSNG/SOL',
-          type: tradeType,
-          price: newPrice,
-          amount: amount,
-          total: total,
-        });
-
-        lastClose = newPrice;
-     }
-
-     const tickTime = lastSimulationTime + (i + 1) * SIMULATION_TICK_RATE;
-     priceChartData.forEach((data, timeframeMinutes) => {
-         updateChartData(data, parseInt(timeframeMinutes), tickTime, lastClose);
-     });
-  }
-  
-  psngAsset.price = lastClose;
-  psngAsset.volume += tradeHistoryData.slice(0, ticksToSimulate).reduce((acc, trade) => acc + trade.total, 0);
-  psngAsset.change = ((lastClose - initialPrice) / initialPrice) * 100;
-  psngAsset.holders += Math.round((Math.random() - 0.5) * ticksToSimulate * 0.5); 
-  
-  if (tradeHistoryData.length > 50) {
-    tradeHistoryData.length = 50;
-  }
-
-  orderBookData.bids = generateClammOrders(lastClose, 15, 'buy');
-  orderBookData.asks = generateClammOrders(lastClose, 15, 'sell');
-
-  lastSimulationTime = now;
+        // Asks (people wanting to sell) are above current price
+        const askPrice = parseFloat((currentPrice + priceSpread).toFixed(4));
+        const askAmount = parseFloat(((depth - i + 1) * 5 * amountJitter).toFixed(2));
+        asks.push({ price: askPrice, amount: askAmount, total: parseFloat((askPrice * askAmount).toFixed(2)) });
+    }
+    return { bids, asks };
 }
 
-function updateChartData(data: Candlestick[], timeframeMinutes: number, time: number, price: number) {
-    const timeframeSeconds = timeframeMinutes * 60;
-    const candleTime = Math.floor(time / 1000 / timeframeSeconds) * timeframeSeconds;
-
-    if (data.length === 0) {
-        data.push({ time: candleTime, open: price, high: price, low: price, close: price });
-        return;
-    }
-
-    let lastCandle = data[data.length - 1];
-
-    if (lastCandle.time === candleTime) {
-        lastCandle.close = price;
-        lastCandle.high = Math.max(lastCandle.high, price);
-        lastCandle.low = Math.min(lastCandle.low, price);
-    } else {
-        const previousCandleTime = lastCandle.time;
-        let nextCandleTime = previousCandleTime + timeframeSeconds;
-        
-        while(nextCandleTime < candleTime) {
-            data.push({
-                time: nextCandleTime,
-                open: lastCandle.close,
-                high: lastCandle.close,
-                low: lastCandle.close,
-                close: lastCandle.close,
-            });
-            lastCandle = data[data.length - 1]; 
-            nextCandleTime += timeframeSeconds;
-        }
-
-        data.push({
-            time: candleTime,
-            open: lastCandle.close,
-            high: price,
-            low: price,
-            close: price,
-        });
-    }
-
-    if (data.length > 200) {
-        data.shift();
-    }
-}
-
-
-function generateClammOrders(basePrice: number, count: number, type: 'buy' | 'sell') {
-    let orders = [];
-    let currentPrice = basePrice;
-    const concentrationFactor = 0.4;
-
-    for (let i = 0; i < count; i++) {
-        const priceGapMultiplier = 1 + i * 0.1;
-        const priceChange = (Math.random() * 0.001) * priceGapMultiplier;
-
-        currentPrice = type === 'buy' 
-            ? currentPrice * (1 - priceChange) 
-            : currentPrice * (1 + priceChange);
-
-        const liquidityDecay = Math.exp(-concentrationFactor * i);
-        const baseAmount = 8000;
-        const amount = (baseAmount * liquidityDecay) * (0.8 + Math.random() * 0.4);
-
-        orders.push({
-            price: currentPrice,
-            amount,
-            total: currentPrice * amount,
-        });
-    }
-    return orders;
-}
 
 function getAssetData(assetId: string, timeframe: string) {
     const asset = assets.find(a => a.id === assetId);
-    if (!asset) {
-        return null;
+    if (!asset) return null;
+
+    const timeframeMinutes = parseInt(timeframe);
+    const chartKey = `${assetId}-${timeframeMinutes}`;
+    
+    if (!priceChartData.has(chartKey)) {
+        generateCandlestickData(assetId, timeframeMinutes);
     }
     
-    simulateMarketActivity();
-    
-    const chartDataForTimeframe = priceChartData.get(timeframe) || [];
+    const chartDataForTimeframe = priceChartData.get(chartKey) || [];
+    const orderBookData = generateClammOrders(asset.price);
 
     return {
         priceChart: chartDataForTimeframe,
         orderBook: orderBookData,
-        tradeHistory: tradeHistoryData,
+        tradeHistory: [], // Trade history will now be fetched from Firestore on the client
     };
 }
-
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get('type');
   const assetId = searchParams.get('assetId');
   const timeframe = searchParams.get('timeframe') || '5';
-
-  if (priceChartData.size === 0) {
-    initializeChartData();
-  }
-
-  simulateMarketActivity();
 
   if (type === 'assets') {
     return NextResponse.json(assets);

@@ -5,6 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { cn } from "@/lib/utils"
+import { useState } from "react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -31,9 +33,14 @@ interface LimitOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
   onTrade: (price: number, type: 'buy' | 'sell') => void;
+  onSwap?: (amount: number, price?: number) => Promise<void>;
+  poolReserveSOL?: number;
+  poolReservePSNG?: number;
+  solBalance?: number;
+  psngBalance?: number;
 }
 
-export default function LimitOrderForm({ type, selectedAsset, onTrade }: LimitOrderFormProps) {
+export default function LimitOrderForm({ type, selectedAsset, onTrade, onSwap, poolReserveSOL, poolReservePSNG, solBalance, psngBalance }: LimitOrderFormProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -45,52 +52,115 @@ export default function LimitOrderForm({ type, selectedAsset, onTrade }: LimitOr
 
   const assetName = selectedAsset.id.split('/')[0];
   const currencyName = selectedAsset.id.split('/')[1];
+  const [loadingModal, setLoadingModal] = useState(false);
+  const [amountInput, setAmountInput] = useState('');
+  const [priceInput, setPriceInput] = useState('');
+  const FEE = 0.02;
 
+  // Estimasi total SOL yang dibutuhkan/didapat
+  let estimatedTotalSOL = null;
+  if (amountInput && priceInput) {
+    const amount = Number(amountInput);
+    const price = Number(priceInput);
+    if (!isNaN(amount) && !isNaN(price) && amount > 0 && price > 0) {
+      estimatedTotalSOL = amount * price;
+    }
+  }
 
-  function onSubmit(data: z.infer<typeof FormSchema>) {
-    toast({
-      title: "Limit Order Submitted",
-      description: `Your ${type} order for ${data.amount} ${assetName} at ${data.price.toFixed(2)} ${currencyName} has been placed.`,
-    })
-    onTrade(data.price, type);
-    form.reset()
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (onSwap) {
+      setLoadingModal(true);
+      const loadingTimeout = setTimeout(() => setLoadingModal(false), 5000);
+      try {
+        // Untuk limit order, kirim amount dan price ke backend jika perlu
+        await onSwap(Number(data.amount), Number(data.price));
+      } finally {
+        clearTimeout(loadingTimeout);
+        setLoadingModal(false);
+      }
+    } else {
+      // onTrade tidak digunakan untuk buy, karena swap sudah handle
+    }
+    form.reset();
+    setAmountInput('');
+    setPriceInput('');
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-        <FormField
-          control={form.control}
-          name="price"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Price ({currencyName})</FormLabel>
-              <FormControl>
-                <Input placeholder="0.00" type="number" step="0.01" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+    <>
+      <Dialog open={loadingModal}>
+        <DialogContent className="flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
+        </DialogContent>
+      </Dialog>
+      {/* Tampilkan saldo di atas form */}
+      {type === 'buy' && solBalance !== undefined && (
+        <div className="mb-2 text-xs text-success font-semibold">Your SOL Balance: {solBalance}</div>
+      )}
+      {type === 'sell' && psngBalance !== undefined && (
+        <div className="mb-2 text-xs text-success font-semibold">Your PSNG Balance: {psngBalance}</div>
+      )}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <FormField
+            control={form.control}
+            name="amount"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Amount (PSNG)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="0.00000"
+                    type="number"
+                    step="0.00001"
+                    {...field}
+                    value={amountInput}
+                    onChange={e => {
+                      field.onChange(e);
+                      setAmountInput(e.target.value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="price"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Price (SOL per PSNG)</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="0.00000"
+                    type="number"
+                    step="0.00001"
+                    {...field}
+                    value={priceInput}
+                    onChange={e => {
+                      field.onChange(e);
+                      setPriceInput(e.target.value);
+                    }}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          {amountInput && priceInput && estimatedTotalSOL !== null && (
+            <div className="text-xs text-primary pt-1 font-semibold">
+              Estimated total SOL {type === 'buy' ? 'needed' : 'received'}: {estimatedTotalSOL.toFixed(6)}
+            </div>
           )}
-        />
-        <FormField
-          control={form.control}
-          name="amount"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Amount ({assetName})</FormLabel>
-              <FormControl>
-                <Input placeholder="0.00000" type="number" step="0.00001" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
-        <div className="pt-2">
-            <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
-              {type === 'buy' ? `Buy ${assetName}` : `Sell ${assetName}`}
-            </Button>
-        </div>
-      </form>
-    </Form>
+          <div className="pt-2">
+              <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
+                {type === 'buy' ? `Buy ${assetName}` : `Sell ${assetName}`}
+              </Button>
+          </div>
+        </form>
+      </Form>
+    </>
   )
 }

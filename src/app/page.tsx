@@ -14,8 +14,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
-import { signInWithWallet } from '@/lib/firebase';
+import { fetchRecentSwaps } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
+import { onAuthStateChanged, getAuth } from "firebase/auth";
 
 export interface Asset {
   id: string;
@@ -39,6 +40,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [isWalletSetupOpen, setWalletSetupOpen] = useState(false);
   const [tradeMarkers, setTradeMarkers] = useState<TradeMarker[]>([]);
+  const [tradeHistory, setTradeHistory] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
 
   const wallet = useWallet();
@@ -75,28 +77,52 @@ export default function Home() {
     fetchAssets();
   }, []);
 
- useEffect(() => {
-    if (wallet.connected && wallet.publicKey && !user) {
-      const walletAddress = wallet.publicKey.toBase58();
-      signInWithWallet(walletAddress).then(firebaseUser => {
-        if (firebaseUser) {
-          console.log("Successfully signed in with wallet:", walletAddress);
-          setUser(firebaseUser);
-          setWalletSetupOpen(false); // Close dialog on successful sign-in
-        } else {
-          console.error("Failed to sign in with wallet.");
-        }
-      });
-    } else if (!wallet.connected) {
-      setUser(null);
-    }
-  }, [wallet.connected, wallet.publicKey, user]);
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        console.log("Firebase user logged in:", firebaseUser.uid);
+      } else {
+        setUser(null);
+        console.log("Firebase user logged out.");
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
 
   useEffect(() => {
     // When the selected asset changes, clear the markers from the previous asset.
     setTradeMarkers([]);
   }, [selectedAsset]);
+
+
+  // Fetch swap/trade data from Firestore
+  useEffect(() => {
+    async function fetchSwaps() {
+      const swaps = await fetchRecentSwaps(50);
+      // Only for PSNG/SOL pair (if needed, filter here)
+      const filtered = swaps.filter(s => s.direction && (s.direction === 'buy' || s.direction === 'sell'));
+      // For chart markers
+      setTradeMarkers(filtered.map(s => ({
+        time: Math.floor((s.timestamp?.seconds || Date.now()/1000)),
+        price: s.exchangeRate,
+        type: s.direction
+      })));
+      // For order history
+      setTradeHistory(filtered.map(s => ({
+        date: new Date(s.timestamp?.seconds ? s.timestamp.seconds * 1000 : Date.now()).toISOString(),
+        pair: 'PSNG/SOL',
+        type: s.direction === 'buy' ? 'Buy' : 'Sell',
+        price: s.exchangeRate,
+        amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
+        total: s.amountIn || 0
+      })));
+    }
+    fetchSwaps();
+  }, []);
 
 
   if (loading || !selectedAsset) {
@@ -159,7 +185,7 @@ export default function Home() {
             </div>
             <div className="lg:col-span-2 flex flex-col gap-6">
               <OrderBook selectedAsset={selectedAsset} />
-              <OrderHistory selectedAsset={selectedAsset} />
+              <OrderHistory selectedAsset={selectedAsset} tradeHistory={tradeHistory} />
             </div>
           </div>
         </main>
