@@ -16,7 +16,6 @@ import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
-import { app } from '@/lib/firebase'; // Import app to ensure initialization
 
 
 export interface Asset {
