@@ -33,11 +33,9 @@ interface StopLimitOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
   onTrade: (price: number, type: 'buy' | 'sell') => void;
-  solBalance?: number;
-  psngBalance?: number;
 }
 
-export default function StopLimitOrderForm({ type, selectedAsset, onTrade, solBalance, psngBalance }: StopLimitOrderFormProps) {
+export default function StopLimitOrderForm({ type, selectedAsset, onTrade }: StopLimitOrderFormProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -62,61 +60,53 @@ export default function StopLimitOrderForm({ type, selectedAsset, onTrade, solBa
   }
 
   return (
-    <>
-      {type === 'buy' && solBalance !== undefined && (
-        <div className="mb-2 text-xs text-success font-semibold">Your SOL Balance: {solBalance}</div>
-      )}
-      {type === 'sell' && psngBalance !== undefined && (
-        <div className="mb-2 text-xs text-success font-semibold">Your PSNG Balance: {psngBalance}</div>
-      )}
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FormField
-            control={form.control}
-            name="stopPrice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Stop Price ({currencyName})</FormLabel>
-                <FormControl>
-                  <Input placeholder="0.00" type="number" step="0.01" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="limitPrice"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Limit Price ({currencyName})</FormLabel>
-                <FormControl>
-                  <Input placeholder="0.00" type="number" step="0.01" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="amount"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Amount ({assetName})</FormLabel>
-                <FormControl>
-                  <Input placeholder="0.00000" type="number" step="0.00001" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="pt-2">
-              <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
-                {type === 'buy' ? 'Place Buy Order' : 'Place Sell Order'}
-              </Button>
-          </div>
-        </form>
-      </Form>
-    </>
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <FormField
+          control={form.control}
+          name="stopPrice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Stop Price ({currencyName})</FormLabel>
+              <FormControl>
+                <Input placeholder="0.00" type="number" step="0.01" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="limitPrice"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Limit Price ({currencyName})</FormLabel>
+              <FormControl>
+                <Input placeholder="0.00" type="number" step="0.01" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="amount"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Amount ({assetName})</FormLabel>
+              <FormControl>
+                <Input placeholder="0.00000" type="number" step="0.00001" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="pt-2">
+            <Button type="submit" className={cn("w-full", type === 'buy' ? 'bg-success hover:bg-success/90 text-success-foreground' : 'bg-destructive hover:bg-destructive/90 text-destructive-foreground')}>
+              {type === 'buy' ? 'Place Buy Order' : 'Place Sell Order'}
+            </Button>
+        </div>
+      </form>
+    </Form>
   )
 }

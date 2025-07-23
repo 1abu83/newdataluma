@@ -13,9 +13,9 @@ import LimitOrderForm from "./LimitOrderForm"
 import StopLimitOrderForm from "./StopLimitOrderForm"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@solana/wallet-adapter-react"
+import { getAuth } from "firebase/auth"
 import { useEffect, useState } from "react";
-import { getFirestore, doc, onSnapshot } from "firebase/firestore";
-import { app } from "@/lib/firebase";
+import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 interface Asset {
   id: string;
@@ -27,13 +27,9 @@ interface TradingFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
   onTrade: (price: number, type: 'buy' | 'sell') => void;
-  solBalance: number | undefined;
-  psngBalance: number | undefined;
 }
 
-const SWAP_FUNCTION_URL = "https://swap-xtgnsf4tla-uc.a.run.app";
-
-export default function TradingForm({ type, selectedAsset, onTrade, solBalance, psngBalance }: TradingFormProps) {
+export default function TradingForm({ type, selectedAsset, onTrade }: TradingFormProps) {
   const assetName = selectedAsset.id.split('/')[0];
   const title = type === 'buy' ? `Buy ${assetName}` : `Sell ${assetName}`;
   const titleClass = type === 'buy' ? 'text-success' : 'text-destructive';
@@ -41,54 +37,67 @@ export default function TradingForm({ type, selectedAsset, onTrade, solBalance, 
   const { toast } = useToast();
   const [poolReserveSOL, setPoolReserveSOL] = useState<number | undefined>(undefined);
   const [poolReservePSNG, setPoolReservePSNG] = useState<number | undefined>(undefined);
-  
+  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
+  const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
+
   useEffect(() => {
-    const db = getFirestore(app);
-    const poolRef = doc(db, "pools", "PSNG_SOL");
-
-    const unsubPool = onSnapshot(poolRef, (doc) => {
-      if (doc.exists()) {
-        setPoolReserveSOL(doc.data().reserveSOL);
-        setPoolReservePSNG(doc.data().reservePSNG);
+    async function fetchPool() {
+      try {
+        const db = getFirestore();
+        const poolDoc = await getDoc(doc(db, "pools", "PSNG_SOL"));
+        if (poolDoc.exists()) {
+          setPoolReserveSOL(poolDoc.data().reserveSOL);
+          setPoolReservePSNG(poolDoc.data().reservePSNG);
+        }
+      } catch (e) {
+        setPoolReserveSOL(undefined);
+        setPoolReservePSNG(undefined);
       }
-    });
-
-    return () => unsubPool();
+    }
+    fetchPool();
   }, []);
 
-  async function handleSwap(amount: number, price?: number) {
+  useEffect(() => {
+    async function fetchBalances() {
+      if (!publicKey) return;
+      try {
+        const db = getFirestore();
+        const solDoc = await getDoc(doc(db, "users", publicKey.toBase58(), "balances", "SOL"));
+        const psngDoc = await getDoc(doc(db, "users", publicKey.toBase58(), "balances", "PSNG"));
+        setSolBalance(solDoc.exists() ? solDoc.data().amount : 0);
+        setPsngBalance(psngDoc.exists() ? psngDoc.data().amount : 0);
+      } catch (e) {
+        setSolBalance(undefined);
+        setPsngBalance(undefined);
+      }
+    }
+    fetchBalances();
+  }, [publicKey]);
+
+  async function handleSwap(amount: number) {
     if (!publicKey) {
       toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
       return;
     }
-    // Limit order (simple version) is treated as a market order for now if price is not passed
-    // A real limit order would need a backend service to monitor prices
-    const body: any = {
-      userId: publicKey.toBase58(),
-      direction: type,
-      amount: Number(amount),
-    };
-
-    if (price) {
-      // Logic for limit order if backend supports it. For now, we ignore it.
-      // This is a placeholder for a more complex limit order implementation.
-    }
-
     try {
-      const response = await fetch(SWAP_FUNCTION_URL, {
+      const response = await fetch("https://swap-xtgnsf4tla-uc.a.run.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          userId: publicKey.toBase58(),
+          direction: type, // 'buy' atau 'sell'
+          amount: Number(amount)
+        })
       });
       const data = await response.json();
       if (response.ok) {
-        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut.toFixed(4)} ${type === 'buy' ? assetName : 'SOL'}.` });
-        onTrade(data.exchangeRate, type); // Update chart marker
+        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut} ${type === 'buy' ? assetName : 'SOL'}!` });
+        // (Opsional) Refresh saldo dari Firestore di WalletSetupDialog
       } else {
-        toast({ variant: "destructive", title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: data.error || "Unknown error" });
+        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: data.error || "Unknown error" });
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
+      toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
     }
   }
 
@@ -118,23 +127,10 @@ export default function TradingForm({ type, selectedAsset, onTrade, solBalance, 
             />
           </TabsContent>
           <TabsContent value="market" className="pt-4">
-            <MarketOrderForm 
-              type={type} 
-              selectedAsset={selectedAsset} 
-              onTrade={onTrade} 
-              onSwap={handleSwap}
-              solBalance={solBalance}
-              psngBalance={psngBalance} 
-            />
+            <MarketOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} onSwap={handleSwap} />
           </TabsContent>
           <TabsContent value="stop-limit" className="pt-4">
-            <StopLimitOrderForm 
-              type={type} 
-              selectedAsset={selectedAsset} 
-              onTrade={onTrade}
-              solBalance={solBalance}
-              psngBalance={psngBalance} 
-            />
+            <StopLimitOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} />
           </TabsContent>
           <TabsContent value="trailing-stop" className="pt-4">
             {/* Trailing Stop Form will go here */}

@@ -1,15 +1,11 @@
 
 import { NextResponse } from 'next/server';
 
-// This is a simplified backend for demonstration purposes.
-// In a real application, this data would come from a real-time database,
-// blockchain data, or a dedicated market data provider.
-
 // Initial state for our assets
 let assets = [
   { 
     id: 'PSNG/SOL', 
-    name: 'Pasino',
+    name: 'Psng',
     icon: {
       src: "/psng.png",
       alt: "Pasino logo"
@@ -69,89 +65,45 @@ type Candlestick = {
   close: number;
 };
 
-// Store chart data in memory
+// Data chart statis (tidak ada simulasi/bot)
 let priceChartData: Map<string, Candlestick[]> = new Map();
-let lastGeneratedTime: Map<string, number> = new Map();
 
-function generateCandlestickData(assetId: string, timeframeMinutes: number): Candlestick[] {
-    const asset = assets.find(a => a.id === assetId);
-    if (!asset) return [];
-
-    const timeframeSeconds = timeframeMinutes * 60;
+function initializeChartData() {
     const now = Math.floor(Date.now() / 1000);
-    const data: Candlestick[] = [];
-    
-    // Start from 200 periods before the last generated time or now
-    const startTime = (lastGeneratedTime.get(assetId) || now) - (200 * timeframeSeconds);
-
-    let currentPrice = asset.price;
-    let currentTime = Math.floor(startTime / timeframeSeconds) * timeframeSeconds;
-
-    for (let i = 0; i < 200; i++) {
-        const open = currentPrice;
-        const close = open + (Math.random() - 0.5) * (open * 0.05); // 5% volatility
-        const high = Math.max(open, close) + Math.random() * (open * 0.02);
-        const low = Math.min(open, close) - Math.random() * (open * 0.02);
-
-        data.push({ time: currentTime, open, high, low, close });
-
-        currentPrice = close;
-        currentTime += timeframeSeconds;
-    }
-    
-    lastGeneratedTime.set(assetId, now);
-    priceChartData.set(`${assetId}-${timeframeMinutes}`, data);
-    return data;
+    const initialPrice = assets.find(a => a.id === 'PSNG/SOL')?.price || 0.135;
+    ['1', '5', '15', '30', '60', '240', '1440'].forEach(tfString => {
+        const timeframeMinutes = parseInt(tfString);
+        const timeframeSeconds = timeframeMinutes * 60;
+        const data: Candlestick[] = [];
+        let currentPrice = initialPrice;
+        let currentTime = now - (200 * timeframeSeconds);
+        for (let i = 0; i < 200; i++) {
+            const candleTime = Math.floor(currentTime / timeframeSeconds) * timeframeSeconds;
+            data.push({ time: candleTime, open: currentPrice, high: currentPrice, low: currentPrice, close: currentPrice });
+            currentTime += timeframeSeconds;
+        }
+        priceChartData.set(tfString, data);
+    });
 }
 
-type Order = {
-    price: number;
-    amount: number;
-    total: number;
+let orderBookData: { bids: any[]; asks: any[] } = {
+  bids: [],
+  asks: [],
 };
 
-// Generates a more realistic order book based on CLAMM principles
-function generateClammOrders(currentPrice: number, depth: number = 20): { bids: Order[], asks: Order[] } {
-    const bids: Order[] = [];
-    const asks: Order[] = [];
-    
-    // Concentrate liquidity around the current price
-    for (let i = 1; i <= depth; i++) {
-        const priceSpread = currentPrice * 0.005 * i; // Bids decrease, asks increase
-        const amountJitter = Math.random() * 0.5 + 0.75; // 75% to 125% of base
-        
-        // Bids (people wanting to buy) are below current price
-        const bidPrice = parseFloat((currentPrice - priceSpread).toFixed(4));
-        const bidAmount = parseFloat(((depth - i + 1) * 5 * amountJitter).toFixed(2));
-        bids.push({ price: bidPrice, amount: bidAmount, total: parseFloat((bidPrice * bidAmount).toFixed(2)) });
-
-        // Asks (people wanting to sell) are above current price
-        const askPrice = parseFloat((currentPrice + priceSpread).toFixed(4));
-        const askAmount = parseFloat(((depth - i + 1) * 5 * amountJitter).toFixed(2));
-        asks.push({ price: askPrice, amount: askAmount, total: parseFloat((askPrice * askAmount).toFixed(2)) });
-    }
-    return { bids, asks };
-}
-
+let tradeHistoryData: any[] = [];
 
 function getAssetData(assetId: string, timeframe: string) {
     const asset = assets.find(a => a.id === assetId);
-    if (!asset) return null;
-
-    const timeframeMinutes = parseInt(timeframe);
-    const chartKey = `${assetId}-${timeframeMinutes}`;
-    
-    if (!priceChartData.has(chartKey)) {
-        generateCandlestickData(assetId, timeframeMinutes);
+    if (!asset) {
+        return null;
     }
-    
-    const chartDataForTimeframe = priceChartData.get(chartKey) || [];
-    const orderBookData = generateClammOrders(asset.price);
-
+    // Tidak ada simulasi market, hanya data statis
+    const chartDataForTimeframe = priceChartData.get(timeframe) || [];
     return {
         priceChart: chartDataForTimeframe,
         orderBook: orderBookData,
-        tradeHistory: [], // Trade history will now be fetched from Firestore on the client
+        tradeHistory: tradeHistoryData,
     };
 }
 
@@ -160,6 +112,10 @@ export async function GET(request: Request) {
   const type = searchParams.get('type');
   const assetId = searchParams.get('assetId');
   const timeframe = searchParams.get('timeframe') || '5';
+
+  if (priceChartData.size === 0) {
+    initializeChartData();
+  }
 
   if (type === 'assets') {
     return NextResponse.json(assets);

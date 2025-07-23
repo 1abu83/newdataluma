@@ -17,76 +17,53 @@ import { useWallet } from "@solana/wallet-adapter-react"
 import { useToast } from "@/hooks/use-toast"
 import { Copy } from "lucide-react"
 import { useState, useEffect } from "react"
-import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/auth"
+import { getAuth, signInWithCustomToken } from "firebase/auth"
 import { getFirestore, doc, getDoc } from "firebase/firestore";
-import { app } from "@/lib/firebase";
 
-const LOGIN_OR_SIGNUP_URL = "https://loginorsignup-xtgnsf4tla-uc.a.run.app";
-
+// Ganti dengan endpoint backend Anda
+const API_BASE = "https://generatechallenge-xtgnsf4tla-uc.a.run.app".replace(/\/generatechallenge$/, "");
+const ENDPOINTS = {
+  challenge: "https://generatechallenge-xtgnsf4tla-uc.a.run.app", // tidak dipakai lagi
+  loginOrSignup: "https://loginorsignup-xtgnsf4tla-uc.a.run.app"
+};
 
 interface WalletSetupDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  solBalance: number | undefined;
-  psngBalance: number | undefined;
 }
 
-export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, psngBalance }: WalletSetupDialogProps) {
-  const { publicKey, connected } = useWallet();
+export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupDialogProps) {
+  const { publicKey, signMessage, connected } = useWallet();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [depositWallet, setDepositWallet] = useState<string>("");
   const [psngDepositWallet, setPsngDepositWallet] = useState<string>("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  
-  const auth = getAuth(app);
-  const db = getFirestore(app);
+  const [solBalance, setSolBalance] = useState<number | null>(null);
+  const [psngBalance, setPsngBalance] = useState<number | null>(null);
 
-  async function fetchDepositAddress(userId: string) {
+  // Ambil saldo dari Firestore setelah login sukses
+  async function fetchBalances(userId: string) {
     try {
-      const userDocRef = doc(db, "users", userId);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setDepositWallet(userData.depositWallet || "Not available");
-        // For demo purposes, we assume PSNG deposit wallet is the same
-        setPsngDepositWallet(userData.depositWallet || "Not available"); 
-      } else {
-        console.log("User document not found yet.");
-        setDepositWallet("Checking...");
-      }
+      const db = getFirestore();
+      const solDoc = await getDoc(doc(db, "users", userId, "balances", "SOL"));
+      const psngDoc = await getDoc(doc(db, "users", userId, "balances", "PSNG"));
+      setSolBalance(solDoc.exists() ? solDoc.data().amount : 0);
+      setPsngBalance(psngDoc.exists() ? psngDoc.data().amount : 0);
     } catch (e) {
-      console.error("Error fetching deposit address:", e);
-      setDepositWallet("Error fetching address");
+      setSolBalance(null);
+      setPsngBalance(null);
     }
   }
 
-  // Listener for auth state changes
+  // Panggil fetchBalances setelah login sukses
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setIsLoggedIn(!!user);
-      if (user) {
-         // User is logged in, fetch their data
-         fetchDepositAddress(user.uid);
-      } else {
-        // User is logged out, clear data
-        setDepositWallet("");
-        setPsngDepositWallet("");
-      }
-    });
-    return () => unsubscribe();
-  }, [auth]);
-
+    if (isLoggedIn && publicKey) {
+      fetchBalances(publicKey.toBase58());
+    }
+  }, [isLoggedIn, publicKey]);
 
   const handleCopyAddress = (address: string, token: string) => {
-    if (!address || address.includes("...") || address.includes("N/A")) {
-      toast({
-        variant: "destructive",
-        title: "Address Not Available",
-        description: "The deposit address could not be retrieved or is still loading.",
-      });
-      return;
-    }
     navigator.clipboard.writeText(address);
     toast({
       title: `${token} Address Copied!`,
@@ -94,6 +71,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     });
   };
 
+  // Proses login/register wallet tanpa signature/challenge
   const handleLoginWithWallet = async () => {
     if (!publicKey) {
       toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
@@ -101,27 +79,24 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     }
     setLoading(true);
     try {
-      // 1. Call the simplified login/signup endpoint
-      const response = await fetch(LOGIN_OR_SIGNUP_URL, {
+      // 1. Login/signup hanya dengan walletAddress
+      const loginRes = await fetch(ENDPOINTS.loginOrSignup, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
+        body: JSON.stringify({ walletAddress: publicKey.toBase58() })
       });
+      const loginData = await loginRes.json();
+      if (!loginRes.ok) throw new Error(loginData.error || "Failed to login/signup");
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to login or sign up");
-      }
-
-      // 2. Sign in with the custom token received from the backend
-      await signInWithCustomToken(auth, data.customToken);
-      
-      // 3. The onAuthStateChanged listener will handle fetching the deposit address
-      toast({ title: "Login Success", description: "Wallet authenticated successfully!" });
-
+      // 2. Login ke Firebase Auth
+      const auth = getAuth();
+      await signInWithCustomToken(auth, loginData.customToken);
+      setIsLoggedIn(true);
+      setDepositWallet(loginData.depositWallet || "");
+      setPsngDepositWallet(loginData.depositWallet || ""); // Untuk demo, sama dengan depositWallet
+      toast({ title: "Login Success", description: "Wallet authenticated and deposit address loaded." });
     } catch (e: any) {
-      console.error(e);
-      toast({ variant: "destructive", title: "Login Failed", description: e.message || String(e) });
+      toast({ title: "Login Failed", description: e.message || String(e) });
     } finally {
       setLoading(false);
     }
@@ -154,27 +129,27 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
               <TabsContent value="sol" className="pt-4 space-y-2">
                 <Label htmlFor="sol-deposit-address">SOL Deposit Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input id="sol-deposit-address" value={depositWallet || 'N/A'} readOnly />
+                  <Input id="sol-deposit-address" value={depositWallet} readOnly />
                   <Button variant="outline" size="icon" onClick={() => handleCopyAddress(depositWallet, 'SOL')}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">Send only native SOL to this address.</p>
-                {solBalance !== undefined && (
-                  <div className="text-xs text-success pt-1 font-semibold">Your Balance: {solBalance.toFixed(4)} SOL</div>
+                {solBalance !== null && (
+                  <div className="text-xs text-success pt-1">Saldo SOL: {solBalance}</div>
                 )}
               </TabsContent>
               <TabsContent value="psng" className="pt-4 space-y-2">
                 <Label htmlFor="psng-deposit-address">PSNG Deposit Address</Label>
                 <div className="flex items-center gap-2">
-                  <Input id="psng-deposit-address" value={psngDepositWallet || 'N/A'} readOnly />
+                  <Input id="psng-deposit-address" value={psngDepositWallet} readOnly />
                   <Button variant="outline" size="icon" onClick={() => handleCopyAddress(psngDepositWallet, 'PSNG')}>
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground pt-1">Send only PSNG tokens to this address.</p>
-                {psngBalance !== undefined && (
-                  <div className="text-xs text-success pt-1 font-semibold">Your Balance: {psngBalance.toFixed(4)} PSNG</div>
+                {psngBalance !== null && (
+                  <div className="text-xs text-success pt-1">Saldo PSNG: {psngBalance}</div>
                 )}
               </TabsContent>
             </Tabs>

@@ -14,10 +14,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
-import { app } from '@/lib/firebase';
-import type { User } from 'firebase/auth';
-import { onAuthStateChanged, getAuth } from "firebase/auth";
-import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from "firebase/firestore";
+import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { fetchRecentSwaps } from '@/lib/firebase';
+
 
 export interface Asset {
   id: string;
@@ -43,11 +43,11 @@ export default function Home() {
   const [tradeMarkers, setTradeMarkers] = useState<TradeMarker[]>([]);
   const [tradeHistory, setTradeHistory] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
+  const { publicKey } = useWallet();
+
+  // Centralized balance state
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
   const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
-
-  const wallet = useWallet();
-  const { publicKey } = wallet;
 
   const handleNewTrade = (price: number, type: 'buy' | 'sell') => {
     const newMarker: TradeMarker = {
@@ -57,6 +57,7 @@ export default function Home() {
     };
     setTradeMarkers(prevMarkers => [...prevMarkers, newMarker]);
   };
+
 
   useEffect(() => {
     async function fetchAssets() {
@@ -81,42 +82,37 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const auth = getAuth(app);
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        console.log("Firebase user logged in:", firebaseUser.uid);
-      } else {
-        setUser(null);
-        setSolBalance(undefined);
-        setPsngBalance(undefined);
-        console.log("Firebase user logged out.");
-      }
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
     });
-
     return () => unsubscribe();
   }, []);
 
-  // Centralized balance listener
+  // Real-time balance listener
   useEffect(() => {
-    if (user && publicKey) {
-      const db = getFirestore(app);
-      const solBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "SOL");
-      const psngBalanceRef = doc(db, "users", publicKey.toBase58(), "balances", "PSNG");
+    if (publicKey) {
+      const db = getFirestore();
+      
+      const solBalanceUnsub = onSnapshot(
+        doc(db, "users", publicKey.toBase58(), "balances", "SOL"),
+        (doc) => setSolBalance(doc.exists() ? doc.data().amount : 0)
+      );
 
-      const unsubSol = onSnapshot(solBalanceRef, (doc) => {
-        setSolBalance(doc.exists() ? doc.data().amount : 0);
-      });
-      const unsubPsng = onSnapshot(psngBalanceRef, (doc) => {
-        setPsngBalance(doc.exists() ? doc.data().amount : 0);
-      });
+      const psngBalanceUnsub = onSnapshot(
+        doc(db, "users", publicKey.toBase58(), "balances", "PSNG"),
+        (doc) => setPsngBalance(doc.exists() ? doc.data().amount : 0)
+      );
 
       return () => {
-        unsubSol();
-        unsubPsng();
+        solBalanceUnsub();
+        psngBalanceUnsub();
       };
+    } else {
+      setSolBalance(undefined);
+      setPsngBalance(undefined);
     }
-  }, [user, publicKey]);
+  }, [publicKey]);
 
 
   useEffect(() => {
@@ -125,44 +121,53 @@ export default function Home() {
   }, [selectedAsset]);
 
 
-  // Fetch swap/trade data from Firestore in real-time
+  // Fetch swap/trade data from Firestore
   useEffect(() => {
-    const db = getFirestore(app);
-    const swapsQuery = query(
-      collection(db, "swaps"),
-      orderBy("timestamp", "desc"),
-      limit(50)
-    );
+    async function fetchSwaps() {
+      const swaps = await fetchRecentSwaps(50);
+      const filtered = swaps.filter(s => s.direction && (s.direction === 'buy' || s.direction === 'sell'));
+      filtered.reverse(); // ASCENDING by time
+      
+      const processTimestamp = (timestamp: any): number => {
+        if (!timestamp) return Date.now();
+        // Firestore timestamp object has toDate() method
+        if (typeof timestamp.toDate === 'function') {
+          return timestamp.toDate().getTime();
+        }
+        // Handle numeric timestamp (milliseconds)
+        if (typeof timestamp === 'number') {
+          return timestamp;
+        }
+        // Fallback for string or other types, though less ideal
+        const parsed = Date.parse(timestamp);
+        return isNaN(parsed) ? Date.now() : parsed;
+      };
 
+      // For chart markers
+      setTradeMarkers(filtered.map(s => ({
+        time: Math.floor(processTimestamp(s.timestamp) / 1000),
+        price: s.direction === 'buy' ? (s.amountIn / (s.amountOut || 1)) : (s.amountOut / (s.amountIn || 1)),
+        type: s.direction
+      })));
+
+      // For order history
+      setTradeHistory(filtered.map(s => ({
+        date: new Date(processTimestamp(s.timestamp)).toISOString(),
+        pair: 'PSNG/SOL',
+        type: s.direction === 'buy' ? 'Buy' : 'Sell',
+        price: s.direction === 'buy' ? (s.amountIn / (s.amountOut || 1)) : (s.amountOut / (s.amountIn || 1)),
+        amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
+        total: s.amountIn || 0
+      })));
+    }
+    
+    const db = getFirestore();
+    const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-      const swaps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-      // Map to trade history format
-      const history = swaps.map(s => {
-        const price = s.amountIn > 0 ? s.amountOut / s.amountIn : 0;
-        return {
-          date: new Date(s.timestamp || Date.now()).toISOString(),
-          pair: 'PSNG/SOL',
-          type: s.direction === 'buy' ? 'Buy' : 'Sell',
-          price: price,
-          amount: s.direction === 'buy' ? s.amountOut : s.amountIn,
-          total: s.direction === 'buy' ? s.amountIn : s.amountOut,
-        };
-      });
-      setTradeHistory(history);
-
-      // Map to trade markers for the chart
-      const markers = swaps
-        .filter(s => s.direction && s.amountIn > 0)
-        .map(s => ({
-          time: Math.floor((s.timestamp || Date.now()) / 1000),
-          price: s.amountOut / s.amountIn,
-          type: s.direction as 'buy' | 'sell',
-        }));
-      setTradeMarkers(markers);
+        fetchSwaps(); // Re-fetch whenever swaps collection changes
     });
 
-    return () => unsubscribe(); // Cleanup listener on unmount
+    return () => unsubscribe();
   }, []);
 
 
@@ -200,7 +205,7 @@ export default function Home() {
         isOpen={isWalletSetupOpen} 
         onOpenChange={setWalletSetupOpen}
         solBalance={solBalance}
-        psngBalance={psngBalance}
+        psngBalance={psngBalance} 
       />
       <Header 
         isMarketBarOpen={isMarketBarOpen} 
@@ -226,20 +231,8 @@ export default function Home() {
           </div>
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 mt-6 px-4 md:px-0">
             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TradingForm 
-                type="buy" 
-                selectedAsset={selectedAsset} 
-                onTrade={handleNewTrade} 
-                solBalance={solBalance}
-                psngBalance={psngBalance}
-              />
-              <TradingForm 
-                type="sell" 
-                selectedAsset={selectedAsset} 
-                onTrade={handleNewTrade}
-                solBalance={solBalance}
-                psngBalance={psngBalance}
-              />
+              <TradingForm type="buy" selectedAsset={selectedAsset} onTrade={handleNewTrade} solBalance={solBalance} psngBalance={psngBalance} />
+              <TradingForm type="sell" selectedAsset={selectedAsset} onTrade={handleNewTrade} solBalance={solBalance} psngBalance={psngBalance} />
             </div>
             <div className="lg:col-span-2 flex flex-col gap-6">
               <OrderBook selectedAsset={selectedAsset} />
@@ -252,5 +245,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
