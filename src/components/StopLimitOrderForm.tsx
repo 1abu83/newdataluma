@@ -5,6 +5,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 import { cn } from "@/lib/utils"
+import { useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { RefreshCw } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button"
 import {
@@ -36,8 +40,15 @@ interface StopLimitOrderFormProps {
   psngBalance?: number;
 }
 
+const PSNG_MINT_ADDRESS = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
+const DETECT_BALANCE_ENDPOINT = "https://detectbalance-xtgnsf4tla-uc.a.run.app";
+
+
 export default function StopLimitOrderForm({ type, selectedAsset, solBalance, psngBalance }: StopLimitOrderFormProps) {
   const { toast } = useToast()
+  const { publicKey } = useWallet();
+  const [refreshing, setRefreshing] = useState(false);
+
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -58,13 +69,60 @@ export default function StopLimitOrderForm({ type, selectedAsset, solBalance, ps
     form.reset()
   }
 
+  const handleRefreshBalance = async () => {
+    if (!publicKey) {
+        toast({ variant: "destructive", title: "Error", description: "Please connect your wallet." });
+        return;
+    }
+    const userDoc = (await (await fetch(`https://firestore.googleapis.com/v1/projects/tradeflow-f12a9/databases/(default)/documents/users/${publicKey.toBase58()}`)).json());
+    const depositWallet = userDoc?.fields?.depositWallet?.stringValue;
+    if (!depositWallet) {
+       toast({ variant: "destructive", title: "Error", description: "Deposit wallet not found. Please re-login." });
+       return;
+    }
+
+    setRefreshing(true);
+    try {
+        const tokenType = type === 'buy' ? 'SOL' : 'PSNG';
+        const body: { userId: string, address: string, tokenType: string, tokenMint?: string } = {
+            userId: publicKey.toBase58(),
+            address: depositWallet,
+            tokenType: tokenType,
+        };
+
+        if (tokenType === 'PSNG') {
+            body.tokenMint = PSNG_MINT_ADDRESS;
+        }
+
+        const response = await fetch(DETECT_BALANCE_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "Failed to refresh balance.");
+        }
+
+        toast({ title: `${tokenType} Balance Refresh`, description: "Your balance is being updated." });
+    } catch (e: any) {
+        toast({ variant: "destructive", title: "Refresh Failed", description: e.message || String(e) });
+    } finally {
+        setRefreshing(false);
+    }
+  };
+
   return (
     <>
-      <div className="mb-2 text-xs text-muted-foreground">
+      <div className="flex items-center mb-2 text-xs text-muted-foreground">
         {type === 'buy' 
           ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
           : `Balance: ${(psngBalance ?? 0).toFixed(4)} PSNG`
         }
+         <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={handleRefreshBalance} disabled={refreshing}>
+            <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+        </Button>
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

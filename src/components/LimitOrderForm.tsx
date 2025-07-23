@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { RefreshCw } from "lucide-react";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -37,6 +38,10 @@ interface LimitOrderFormProps {
   psngBalance?: number;
 }
 
+const PSNG_MINT_ADDRESS = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
+const DETECT_BALANCE_ENDPOINT = "https://detectbalance-xtgnsf4tla-uc.a.run.app";
+
+
 export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBalance }: LimitOrderFormProps) {
   const { toast } = useToast()
   const { publicKey } = useWallet();
@@ -52,8 +57,8 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
   const [loadingModal, setLoadingModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Estimasi total SOL yang dibutuhkan/didapat
   let estimatedTotalSOL = null;
   if (amountInput && priceInput) {
     const amount = Number(amountInput);
@@ -69,9 +74,6 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
       return;
     }
     
-    // NOTE: Backend currently treats this as a market order. 
-    // For a buy, we send the total SOL value. For a sell, we send the token amount.
-    // This logic mimics a market buy with a limit on price, but the backend doesn't enforce the limit yet.
     const amountToSend = type === 'buy' ? (amount * (price || 0)) : amount;
     
     if (amountToSend <= 0) {
@@ -87,8 +89,6 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
         body: JSON.stringify({
           userId: publicKey.toBase58(),
           direction: type,
-          // The backend expects `amount` to be the input amount.
-          // For a buy, this is SOL. For a sell, this is PSNG.
           amount: amountToSend 
         })
       });
@@ -108,6 +108,51 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
     }
   }
 
+  const handleRefreshBalance = async () => {
+    if (!publicKey) {
+        toast({ variant: "destructive", title: "Error", description: "Please connect your wallet." });
+        return;
+    }
+    const userDoc = (await (await fetch(`https://firestore.googleapis.com/v1/projects/tradeflow-f12a9/databases/(default)/documents/users/${publicKey.toBase58()}`)).json());
+    const depositWallet = userDoc?.fields?.depositWallet?.stringValue;
+    if (!depositWallet) {
+       toast({ variant: "destructive", title: "Error", description: "Deposit wallet not found. Please re-login." });
+       return;
+    }
+
+    setRefreshing(true);
+    try {
+        const tokenType = type === 'buy' ? 'SOL' : 'PSNG';
+        const body: { userId: string, address: string, tokenType: string, tokenMint?: string } = {
+            userId: publicKey.toBase58(),
+            address: depositWallet,
+            tokenType: tokenType,
+        };
+
+        if (tokenType === 'PSNG') {
+            body.tokenMint = PSNG_MINT_ADDRESS;
+        }
+
+        const response = await fetch(DETECT_BALANCE_ENDPOINT, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body)
+        });
+
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || "Failed to refresh balance.");
+        }
+
+        toast({ title: `${tokenType} Balance Refresh`, description: "Your balance is being updated." });
+    } catch (e: any) {
+        toast({ variant: "destructive", title: "Refresh Failed", description: e.message || String(e) });
+    } finally {
+        setRefreshing(false);
+    }
+  };
+
+
   return (
     <>
       <Dialog open={loadingModal}>
@@ -116,11 +161,14 @@ export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBa
           <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
         </DialogContent>
       </Dialog>
-      <div className="mb-2 text-xs text-muted-foreground">
+      <div className="flex items-center mb-2 text-xs text-muted-foreground">
         {type === 'buy' 
           ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
           : `Balance: ${(psngBalance ?? 0).toFixed(4)} ${assetName}`
         }
+         <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={handleRefreshBalance} disabled={refreshing}>
+            <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+        </Button>
       </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit((data) => handleSwap(data.amount, data.price))} className="space-y-4">
