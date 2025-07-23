@@ -15,7 +15,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
 import { fetchRecentSwaps } from '@/lib/firebase';
 
 
@@ -123,56 +123,67 @@ export default function Home() {
 
   // Fetch swap/trade data from Firestore
   useEffect(() => {
-    async function fetchSwaps() {
-      const swaps = await fetchRecentSwaps(50);
-      
-      const processTimestamp = (timestamp: any): number | null => {
-        if (!timestamp) return null;
-        // Case 1: Firestore Timestamp object
-        if (typeof timestamp.toDate === 'function') {
-          return timestamp.toDate().getTime();
-        }
-        // Case 2: Number (milliseconds since epoch)
-        if (typeof timestamp === 'number') {
-          return timestamp;
-        }
-        // Case 3: String that can be parsed
-        if (typeof timestamp === 'string') {
-          const parsed = Date.parse(timestamp);
-          if (!isNaN(parsed)) return parsed;
-        }
-        // If all else fails, it's an invalid format
-        return null;
-      };
-
-      const validSwaps = swaps.filter(s => {
-        const time = processTimestamp(s.timestamp);
-        // Ensure timestamp is valid and other necessary fields exist
-        return time !== null && s.direction && typeof s.amountIn === 'number' && typeof s.amountOut === 'number';
-      });
-
-      // For chart markers
-      setTradeMarkers(validSwaps.map(s => ({
-        time: Math.floor(processTimestamp(s.timestamp)! / 1000),
-        price: s.amountIn / s.amountOut,
-        type: s.direction
-      })));
-
-      // For order history
-      setTradeHistory(validSwaps.map(s => ({
-        date: new Date(processTimestamp(s.timestamp)!).toISOString(),
-        pair: 'PSNG/SOL',
-        type: s.direction === 'buy' ? 'Buy' : 'Sell',
-        price: s.amountIn / s.amountOut,
-        amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
-        total: s.amountIn || 0
-      })));
-    }
-    
     const db = getFirestore();
     const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
+    
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-        fetchSwaps(); // Re-fetch whenever swaps collection changes
+      const swaps = snapshot.docs.map(doc => doc.data());
+      
+      const { markers, history } = swaps.reduce(
+        (acc, s) => {
+          try {
+            // Check for necessary fields first
+            if (!s.timestamp || !s.direction || typeof s.amountIn !== 'number' || typeof s.amountOut !== 'number') {
+              return acc;
+            }
+
+            let date;
+            if (s.timestamp && typeof s.timestamp.toDate === 'function') {
+              // Handle Firebase Timestamp object
+              date = s.timestamp.toDate();
+            } else {
+              // Handle numeric or string timestamps
+              date = new Date(s.timestamp);
+            }
+
+            // This will throw an error for invalid dates, which the catch block will handle.
+            const isoDateString = date.toISOString(); 
+            const unixTimestamp = Math.floor(date.getTime() / 1000);
+
+            const price = s.direction === 'buy' 
+              ? (s.amountIn / (s.amountOut || 1)) 
+              : (s.amountOut / (s.amountIn || 1));
+            
+            const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
+
+            // Add to markers array if valid
+            acc.markers.push({
+              time: unixTimestamp,
+              price: price,
+              type: s.direction
+            });
+
+            // Add to history array if valid
+            acc.history.push({
+              date: isoDateString,
+              pair: 'PSNG/SOL',
+              type: s.direction === 'buy' ? 'Buy' : 'Sell',
+              price: price,
+              amount: amount,
+              total: s.amountIn,
+            });
+
+          } catch (error) {
+            // Safely ignore the record if the timestamp is invalid
+            console.warn('Skipping swap record with invalid timestamp:', s, error);
+          }
+          return acc;
+        },
+        { markers: [] as TradeMarker[], history: [] as any[] }
+      );
+      
+      setTradeMarkers(markers);
+      setTradeHistory(history);
     });
 
     return () => unsubscribe();
