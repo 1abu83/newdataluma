@@ -21,12 +21,8 @@ import { getAuth, signInWithCustomToken, onAuthStateChanged } from "firebase/aut
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 import { app } from "@/lib/firebase";
 
-const GENERATE_CHALLENGE_URL = "https://generatechallenge-xtgnsf4tla-uc.a.run.app";
-const VERIFY_SIGNATURE_URL = "https://verifysignatureandlogin-xtgnsf4tla-uc.a.run.app";
+const LOGIN_OR_SIGNUP_URL = "https://loginorsignup-xtgnsf4tla-uc.a.run.app";
 
-function bufferToBase64(buffer: Uint8Array): string {
-    return btoa(String.fromCharCode.apply(null, Array.from(buffer)));
-}
 
 interface WalletSetupDialogProps {
   isOpen: boolean;
@@ -36,7 +32,7 @@ interface WalletSetupDialogProps {
 }
 
 export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, psngBalance }: WalletSetupDialogProps) {
-  const { publicKey, signMessage, connected } = useWallet();
+  const { publicKey, connected } = useWallet();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [depositWallet, setDepositWallet] = useState<string>("");
@@ -45,6 +41,25 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   
   const auth = getAuth(app);
   const db = getFirestore(app);
+
+  async function fetchDepositAddress(userId: string) {
+    try {
+      const userDocRef = doc(db, "users", userId);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        setDepositWallet(userData.depositWallet || "Not available");
+        // For demo purposes, we assume PSNG deposit wallet is the same
+        setPsngDepositWallet(userData.depositWallet || "Not available"); 
+      } else {
+        console.log("User document not found yet.");
+        setDepositWallet("Checking...");
+      }
+    } catch (e) {
+      console.error("Error fetching deposit address:", e);
+      setDepositWallet("Error fetching address");
+    }
+  }
 
   // Listener for auth state changes
   useEffect(() => {
@@ -62,24 +77,6 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     return () => unsubscribe();
   }, [auth]);
 
-  // Fetches the deposit address from Firestore after login
-  async function fetchDepositAddress(userId: string) {
-    try {
-      const userDocRef = doc(db, "users", userId);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setDepositWallet(userData.depositWallet || "Not available");
-        setPsngDepositWallet(userData.depositWallet || "Not available"); // Demo: using same wallet
-      } else {
-        console.log("User document not found yet, might be created shortly.");
-        setDepositWallet("Checking...");
-      }
-    } catch (e) {
-      console.error("Error fetching deposit address:", e);
-      setDepositWallet("Error fetching address");
-    }
-  }
 
   const handleCopyAddress = (address: string, token: string) => {
     if (!address || address.includes("...") || address.includes("N/A")) {
@@ -98,44 +95,29 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   };
 
   const handleLoginWithWallet = async () => {
-    if (!publicKey || !signMessage) {
-      toast({ title: "Wallet not connected or signMessage not available", description: "Please connect your wallet first." });
+    if (!publicKey) {
+      toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
       return;
     }
     setLoading(true);
     try {
-      // 1. Get challenge
-      const challengeResponse = await fetch(GENERATE_CHALLENGE_URL, {
+      // 1. Call the simplified login/signup endpoint
+      const response = await fetch(LOGIN_OR_SIGNUP_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress: publicKey.toBase58() })
-      });
-      if (!challengeResponse.ok) throw new Error('Failed to get challenge');
-      const { challenge } = await challengeResponse.json();
-      
-      // 2. Sign challenge
-      const message = new TextEncoder().encode(challenge);
-      const signatureBytes = await signMessage(message);
-      const signatureBase64 = bufferToBase64(signatureBytes);
-
-      // 3. Verify signature and get custom token
-      const verifyResponse = await fetch(VERIFY_SIGNATURE_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          walletAddress: publicKey.toBase58(),
-          signature: signatureBase64,
-          challenge
-        }),
+        body: JSON.stringify({ walletAddress: publicKey.toBase58() }),
       });
 
-      const data = await verifyResponse.json();
-      if (!verifyResponse.ok) throw new Error(data.error || "Failed to verify signature");
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to login or sign up");
+      }
 
-      // 4. Sign in with custom token, which will trigger onAuthStateChanged
+      // 2. Sign in with the custom token received from the backend
       await signInWithCustomToken(auth, data.customToken);
       
-      toast({ title: "Login Success", description: "Wallet authenticated. Fetching deposit address..." });
+      // 3. The onAuthStateChanged listener will handle fetching the deposit address
+      toast({ title: "Login Success", description: "Wallet authenticated successfully!" });
 
     } catch (e: any) {
       console.error(e);
@@ -208,5 +190,3 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
     </Dialog>
   );
 }
-
-    
