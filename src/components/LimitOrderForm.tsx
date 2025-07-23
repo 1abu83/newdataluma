@@ -7,6 +7,7 @@ import { z } from "zod"
 import { cn } from "@/lib/utils"
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -32,15 +33,13 @@ interface Asset {
 interface LimitOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
-  onSwap?: (amount: number, price?: number) => Promise<void>;
-  poolReserveSOL?: number;
-  poolReservePSNG?: number;
   solBalance?: number;
   psngBalance?: number;
 }
 
-export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserveSOL, poolReservePSNG, solBalance, psngBalance }: LimitOrderFormProps) {
+export default function LimitOrderForm({ type, selectedAsset, solBalance, psngBalance }: LimitOrderFormProps) {
   const { toast } = useToast()
+  const { publicKey } = useWallet();
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -50,7 +49,6 @@ export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserv
   })
 
   const assetName = selectedAsset.id.split('/')[0];
-  const currencyName = selectedAsset.id.split('/')[1];
   const [loadingModal, setLoadingModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
@@ -65,25 +63,46 @@ export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserv
     }
   }
 
-  async function onSubmit(data: z.infer<typeof FormSchema>) {
-    if (onSwap) {
-      setLoadingModal(true);
-      const loadingTimeout = setTimeout(() => setLoadingModal(false), 5000);
-      try {
-        // Untuk limit order, kirim amount dan price ke backend jika perlu
-        // Backend saat ini tidak mendukung limit order, jadi kita kirim amount SOL untuk buy
-        const amountToSend = type === 'buy' ? (data.amount * data.price) : data.amount;
-        await onSwap(amountToSend);
-      } finally {
-        clearTimeout(loadingTimeout);
-        setLoadingModal(false);
-      }
-    } else {
-       toast({ title: "OnSwap function not provided" });
+  async function handleSwap(amount: number, price?: number) {
+    if (!publicKey) {
+      toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
+      return;
     }
-    form.reset();
-    setAmountInput('');
-    setPriceInput('');
+    
+    // NOTE: Backend currently doesn't support true limit orders. 
+    // It treats this as a market order. For a buy, we send the total SOL value.
+    const amountToSend = type === 'buy' ? (amount * (price || 0)) : amount;
+    
+    if (amountToSend <= 0) {
+       toast({ variant: "destructive", title: "Invalid Amount", description: "Calculated amount must be positive." });
+       return;
+    }
+
+    setLoadingModal(true);
+    try {
+      const response = await fetch("https://swap-xtgnsf4tla-uc.a.run.app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: publicKey.toBase58(),
+          direction: type,
+          amount: amountToSend
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        toast({ title: `Limit ${type === 'buy' ? 'Buy' : 'Sell'} Order Submitted`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut.toFixed(4)} ${type === 'buy' ? assetName : 'SOL'}!` });
+        form.reset();
+        setAmountInput('');
+        setPriceInput('');
+      } else {
+         throw new Error(data.error || "Unknown error during swap");
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: `Order Failed`, description: e.message || String(e) });
+    } finally {
+        setLoadingModal(false);
+    }
   }
 
   return (
@@ -94,21 +113,20 @@ export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserv
           <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
         </DialogContent>
       </Dialog>
-      {/* Tampilkan saldo di atas form */}
       <div className="mb-2 text-xs text-muted-foreground">
         {type === 'buy' 
           ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
-          : `Balance: ${(psngBalance ?? 0).toFixed(4)} PSNG`
+          : `Balance: ${(psngBalance ?? 0).toFixed(4)} ${assetName}`
         }
       </div>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit((data) => handleSwap(data.amount, data.price))} className="space-y-4">
           <FormField
             control={form.control}
             name="amount"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Amount (PSNG)</FormLabel>
+                <FormLabel>Amount ({assetName})</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="0.00000"
@@ -131,7 +149,7 @@ export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserv
             name="price"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Price (SOL per PSNG)</FormLabel>
+                <FormLabel>Price (SOL per {assetName})</FormLabel>
                 <FormControl>
                   <Input
                     placeholder="0.00000"

@@ -74,6 +74,9 @@ export default function Home() {
     const auth = getAuth();
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        setWalletSetupOpen(false); // Close dialog on successful login
+      }
     });
     return () => unsubscribe();
   }, []);
@@ -122,39 +125,33 @@ export default function Home() {
           try {
             // Check for necessary fields first
             if (!s.timestamp || !s.direction || typeof s.amountIn !== 'number' || typeof s.amountOut !== 'number') {
-              console.warn('Skipping swap record with missing fields:', s);
               return acc;
             }
 
             let date;
-            // Handle Firebase Timestamp object
             if (s.timestamp && typeof s.timestamp.toDate === 'function') {
               date = s.timestamp.toDate();
             } else {
-              // Attempt to handle numeric or string timestamps, but be cautious
               date = new Date(s.timestamp);
             }
-
+             
             // This will throw an error for invalid dates, which the catch block will handle.
             const isoDateString = date.toISOString(); 
             const unixTimestamp = Math.floor(date.getTime() / 1000);
 
-            // Price calculation based on direction
-            const price = s.direction === 'buy' 
+            // Price calculation based on direction and ensure it's a number
+            const price = parseFloat(s.exchangeRate) || (s.direction === 'buy' 
               ? (s.amountIn / (s.amountOut || 1)) 
-              : (s.amountOut / (s.amountIn || 1));
+              : (s.amountOut / (s.amountIn || 1)));
             
-            // Amount is always the token being bought or sold (PSNG)
             const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
 
-            // Add to markers array if valid
             acc.markers.push({
               time: unixTimestamp,
               price: price,
               type: s.direction
             });
 
-            // Add to history array if valid
             acc.history.push({
               date: isoDateString,
               pair: 'PSNG/SOL',
@@ -165,8 +162,8 @@ export default function Home() {
             });
 
           } catch (error) {
-            // Safely ignore the record if the timestamp is invalid
-            console.warn('Skipping swap record with invalid timestamp:', s, error);
+            // Safely ignore the record if any processing fails
+            console.warn('Skipping swap record due to processing error:', s, error);
           }
           return acc;
         },

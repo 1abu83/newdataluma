@@ -7,6 +7,7 @@ import { z } from "zod"
 import { cn } from "@/lib/utils"
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -33,13 +34,13 @@ interface Asset {
 interface MarketOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
-  onSwap?: (amount: number) => Promise<void>;
   solBalance?: number;
   psngBalance?: number;
 }
 
-export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalance, psngBalance }: MarketOrderFormProps) {
+export default function MarketOrderForm({ type, selectedAsset, solBalance, psngBalance }: MarketOrderFormProps) {
   const { toast } = useToast()
+  const { publicKey } = useWallet();
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -50,7 +51,7 @@ export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalanc
   const assetName = selectedAsset.id.split('/')[0];
   const [loadingModal, setLoadingModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
-  const FEE = 0.02;
+  const FEE = 0.02; // This is a client-side estimation, the backend fee is the source of truth
 
   // Estimasi jumlah yang didapat
   let estimatedReceived = null;
@@ -68,23 +69,38 @@ export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalanc
       }
     }
   }
-
-  async function onSubmit(data: z.infer<typeof FormSchema>) {
-    if (onSwap) {
-      setLoadingModal(true);
-      const loadingTimeout = setTimeout(() => setLoadingModal(false), 5000);
-      try {
-        await onSwap(Number(data.amount));
-      } finally {
-        clearTimeout(loadingTimeout);
-        setLoadingModal(false);
-      }
-    } else {
-       toast({ title: "OnSwap function not provided" });
+  
+  async function handleSwap(amount: number) {
+    if (!publicKey) {
+      toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
+      return;
     }
-    form.reset();
-    setAmountInput('');
+    setLoadingModal(true);
+    try {
+      const response = await fetch("https://swap-xtgnsf4tla-uc.a.run.app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: publicKey.toBase58(),
+          direction: type,
+          amount: Number(amount)
+        })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut.toFixed(4)} ${type === 'buy' ? assetName : 'SOL'}!` });
+        form.reset();
+        setAmountInput('');
+      } else {
+        throw new Error(data.error || "Unknown error during swap");
+      }
+    } catch (e: any) {
+      toast({ variant: "destructive", title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
+    } finally {
+        setLoadingModal(false);
+    }
   }
+
 
   return (
     <>
@@ -97,11 +113,11 @@ export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalanc
        <div className="mb-2 text-xs text-muted-foreground">
         {type === 'buy' 
           ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
-          : `Balance: ${(psngBalance ?? 0).toFixed(4)} PSNG`
+          : `Balance: ${(psngBalance ?? 0).toFixed(4)} ${assetName}`
         }
       </div>
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form onSubmit={form.handleSubmit((data) => handleSwap(data.amount))} className="space-y-4">
           <FormField
             control={form.control}
             name="amount"
