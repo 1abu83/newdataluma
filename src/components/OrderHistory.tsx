@@ -24,7 +24,7 @@ type Trade = {
   date: string;
   pair: string;
   type: 'Buy' | 'Sell';
-  price: number;
+  price: number | string;
   amount: number;
   total: number;
 };
@@ -60,7 +60,7 @@ export default function OrderHistory({ selectedAsset, tradeHistory }: OrderHisto
                       {trade.type}
                     </span>
                   </TableCell>
-                  <TableCell className={`text-right truncate ${trade.type === 'Buy' ? 'text-success' : 'text-destructive'}`}>{trade.price.toFixed(4)}</TableCell>
+                  <TableCell className={`text-right truncate ${trade.type === 'Buy' ? 'text-success' : 'text-destructive'}`}>{Number(trade.price).toFixed(4)}</TableCell>
                   <TableCell className="text-right truncate">{trade.amount.toFixed(2)}</TableCell>
                 </TableRow>
               ))}

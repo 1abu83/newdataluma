@@ -108,15 +108,15 @@ export default function Home() {
       // For chart markers
       setTradeMarkers(filtered.map(s => ({
         time: Math.floor((s.timestamp?.seconds || Date.now()/1000)),
-        price: s.exchangeRate,
+        price: Number(s.exchangeRate),
         type: s.direction
       })));
       // For order history
       setTradeHistory(filtered.map(s => ({
-        date: new Date(s.timestamp?.seconds ? s.timestamp.seconds * 1000 : Date.now()).toISOString(),
+        date: new Date(s.timestamp?.seconds ? s.timestamp.seconds * 1000 : s.timestamp || Date.now()).toISOString(),
         pair: 'PSNG/SOL',
         type: s.direction === 'buy' ? 'Buy' : 'Sell',
-        price: s.exchangeRate,
+        price: Number(s.exchangeRate),
         amount: s.direction === 'buy' ? (s.amountOut || 0) : (s.amountIn || 0),
         total: s.amountIn || 0
       })));
