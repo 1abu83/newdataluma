@@ -13,7 +13,6 @@ import LimitOrderForm from "./LimitOrderForm"
 import StopLimitOrderForm from "./StopLimitOrderForm"
 import { useToast } from "@/hooks/use-toast"
 import { useWallet } from "@solana/wallet-adapter-react"
-import { getAuth } from "firebase/auth"
 import { useEffect, useState } from "react";
 import { getFirestore, doc, getDoc } from "firebase/firestore";
 
@@ -26,10 +25,11 @@ interface Asset {
 interface TradingFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
-  onTrade: (price: number, type: 'buy' | 'sell') => void;
+  solBalance?: number;
+  psngBalance?: number;
 }
 
-export default function TradingForm({ type, selectedAsset, onTrade }: TradingFormProps) {
+export default function TradingForm({ type, selectedAsset, solBalance, psngBalance }: TradingFormProps) {
   const assetName = selectedAsset.id.split('/')[0];
   const title = type === 'buy' ? `Buy ${assetName}` : `Sell ${assetName}`;
   const titleClass = type === 'buy' ? 'text-success' : 'text-destructive';
@@ -37,8 +37,6 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
   const { toast } = useToast();
   const [poolReserveSOL, setPoolReserveSOL] = useState<number | undefined>(undefined);
   const [poolReservePSNG, setPoolReservePSNG] = useState<number | undefined>(undefined);
-  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
-  const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
 
   useEffect(() => {
     async function fetchPool() {
@@ -57,29 +55,15 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
     fetchPool();
   }, []);
 
-  useEffect(() => {
-    async function fetchBalances() {
-      if (!publicKey) return;
-      try {
-        const db = getFirestore();
-        const solDoc = await getDoc(doc(db, "users", publicKey.toBase58(), "balances", "SOL"));
-        const psngDoc = await getDoc(doc(db, "users", publicKey.toBase58(), "balances", "PSNG"));
-        setSolBalance(solDoc.exists() ? solDoc.data().amount : 0);
-        setPsngBalance(psngDoc.exists() ? psngDoc.data().amount : 0);
-      } catch (e) {
-        setSolBalance(undefined);
-        setPsngBalance(undefined);
-      }
-    }
-    fetchBalances();
-  }, [publicKey]);
-
   async function handleSwap(amount: number) {
     if (!publicKey) {
       toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
       return;
     }
     try {
+      // NOTE: Using loginOrSignup URL for swap endpoint as per user's provided backend function list.
+      // This might be an error in the backend deployment, but we follow the provided URL.
+      // The correct URL is likely different.
       const response = await fetch("https://swap-xtgnsf4tla-uc.a.run.app", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,8 +75,8 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
       });
       const data = await response.json();
       if (response.ok) {
-        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut} ${type === 'buy' ? assetName : 'SOL'}!` });
-        // (Opsional) Refresh saldo dari Firestore di WalletSetupDialog
+        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut.toFixed(4)} ${type === 'buy' ? assetName : 'SOL'}!` });
+        // Balance will update automatically via the onSnapshot listener in page.tsx
       } else {
         toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: data.error || "Unknown error" });
       }
@@ -118,7 +102,6 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
             <LimitOrderForm
               type={type}
               selectedAsset={selectedAsset}
-              onTrade={onTrade}
               onSwap={handleSwap}
               poolReserveSOL={poolReserveSOL}
               poolReservePSNG={poolReservePSNG}
@@ -127,10 +110,21 @@ export default function TradingForm({ type, selectedAsset, onTrade }: TradingFor
             />
           </TabsContent>
           <TabsContent value="market" className="pt-4">
-            <MarketOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} onSwap={handleSwap} />
+            <MarketOrderForm 
+              type={type} 
+              selectedAsset={selectedAsset} 
+              onSwap={handleSwap} 
+              solBalance={solBalance} 
+              psngBalance={psngBalance}
+            />
           </TabsContent>
           <TabsContent value="stop-limit" className="pt-4">
-            <StopLimitOrderForm type={type} selectedAsset={selectedAsset} onTrade={onTrade} />
+            <StopLimitOrderForm 
+              type={type} 
+              selectedAsset={selectedAsset} 
+              solBalance={solBalance} 
+              psngBalance={psngBalance} 
+            />
           </TabsContent>
           <TabsContent value="trailing-stop" className="pt-4">
             {/* Trailing Stop Form will go here */}

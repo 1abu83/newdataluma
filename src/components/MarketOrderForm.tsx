@@ -33,11 +33,12 @@ interface Asset {
 interface MarketOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
-  onTrade: (price: number, type: 'buy' | 'sell') => void;
   onSwap?: (amount: number) => Promise<void>;
+  solBalance?: number;
+  psngBalance?: number;
 }
 
-export default function MarketOrderForm({ type, selectedAsset, onTrade, onSwap }: MarketOrderFormProps) {
+export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalance, psngBalance }: MarketOrderFormProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -79,7 +80,7 @@ export default function MarketOrderForm({ type, selectedAsset, onTrade, onSwap }
         setLoadingModal(false);
       }
     } else {
-      onTrade(selectedAsset.price, type);
+       toast({ title: "OnSwap function not provided" });
     }
     form.reset();
     setAmountInput('');
@@ -93,6 +94,12 @@ export default function MarketOrderForm({ type, selectedAsset, onTrade, onSwap }
           <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
         </DialogContent>
       </Dialog>
+       <div className="mb-2 text-xs text-muted-foreground">
+        {type === 'buy' 
+          ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
+          : `Balance: ${(psngBalance ?? 0).toFixed(4)} PSNG`
+        }
+      </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField

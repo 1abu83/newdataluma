@@ -16,7 +16,6 @@ import WalletSetupDialog from '@/components/WalletSetupDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
-import { fetchRecentSwaps } from '@/lib/firebase';
 
 
 export interface Asset {
@@ -48,16 +47,6 @@ export default function Home() {
   // Centralized balance state
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
   const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
-
-  const handleNewTrade = (price: number, type: 'buy' | 'sell') => {
-    const newMarker: TradeMarker = {
-      time: Math.floor(Date.now() / 1000),
-      price: price,
-      type: type,
-    };
-    setTradeMarkers(prevMarkers => [...prevMarkers, newMarker]);
-  };
-
 
   useEffect(() => {
     async function fetchAssets() {
@@ -121,28 +110,28 @@ export default function Home() {
   }, [selectedAsset]);
 
 
-  // Fetch swap/trade data from Firestore
+  // Fetch swap/trade data from Firestore using a real-time listener
   useEffect(() => {
     const db = getFirestore();
     const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
     
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-      const swaps = snapshot.docs.map(doc => doc.data());
-      
-      const { markers, history } = swaps.reduce(
-        (acc, s) => {
+      const { markers, history } = snapshot.docs.reduce(
+        (acc, sDoc) => {
+          const s = sDoc.data();
           try {
             // Check for necessary fields first
             if (!s.timestamp || !s.direction || typeof s.amountIn !== 'number' || typeof s.amountOut !== 'number') {
+              console.warn('Skipping swap record with missing fields:', s);
               return acc;
             }
 
             let date;
+            // Handle Firebase Timestamp object
             if (s.timestamp && typeof s.timestamp.toDate === 'function') {
-              // Handle Firebase Timestamp object
               date = s.timestamp.toDate();
             } else {
-              // Handle numeric or string timestamps
+              // Attempt to handle numeric or string timestamps, but be cautious
               date = new Date(s.timestamp);
             }
 
@@ -150,10 +139,12 @@ export default function Home() {
             const isoDateString = date.toISOString(); 
             const unixTimestamp = Math.floor(date.getTime() / 1000);
 
+            // Price calculation based on direction
             const price = s.direction === 'buy' 
               ? (s.amountIn / (s.amountOut || 1)) 
               : (s.amountOut / (s.amountIn || 1));
             
+            // Amount is always the token being bought or sold (PSNG)
             const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
 
             // Add to markers array if valid
@@ -248,8 +239,8 @@ export default function Home() {
           </div>
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 mt-6 px-4 md:px-0">
             <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TradingForm type="buy" selectedAsset={selectedAsset} onTrade={handleNewTrade} solBalance={solBalance} psngBalance={psngBalance} />
-              <TradingForm type="sell" selectedAsset={selectedAsset} onTrade={handleNewTrade} solBalance={solBalance} psngBalance={psngBalance} />
+              <TradingForm type="buy" selectedAsset={selectedAsset} solBalance={solBalance} psngBalance={psngBalance} />
+              <TradingForm type="sell" selectedAsset={selectedAsset} solBalance={solBalance} psngBalance={psngBalance} />
             </div>
             <div className="lg:col-span-2 flex flex-col gap-6">
               <OrderBook selectedAsset={selectedAsset} />

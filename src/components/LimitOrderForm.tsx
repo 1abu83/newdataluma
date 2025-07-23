@@ -32,7 +32,6 @@ interface Asset {
 interface LimitOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
-  onTrade: (price: number, type: 'buy' | 'sell') => void;
   onSwap?: (amount: number, price?: number) => Promise<void>;
   poolReserveSOL?: number;
   poolReservePSNG?: number;
@@ -40,7 +39,7 @@ interface LimitOrderFormProps {
   psngBalance?: number;
 }
 
-export default function LimitOrderForm({ type, selectedAsset, onTrade, onSwap, poolReserveSOL, poolReservePSNG, solBalance, psngBalance }: LimitOrderFormProps) {
+export default function LimitOrderForm({ type, selectedAsset, onSwap, poolReserveSOL, poolReservePSNG, solBalance, psngBalance }: LimitOrderFormProps) {
   const { toast } = useToast()
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
@@ -55,7 +54,6 @@ export default function LimitOrderForm({ type, selectedAsset, onTrade, onSwap, p
   const [loadingModal, setLoadingModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
   const [priceInput, setPriceInput] = useState('');
-  const FEE = 0.02;
 
   // Estimasi total SOL yang dibutuhkan/didapat
   let estimatedTotalSOL = null;
@@ -73,13 +71,15 @@ export default function LimitOrderForm({ type, selectedAsset, onTrade, onSwap, p
       const loadingTimeout = setTimeout(() => setLoadingModal(false), 5000);
       try {
         // Untuk limit order, kirim amount dan price ke backend jika perlu
-        await onSwap(Number(data.amount), Number(data.price));
+        // Backend saat ini tidak mendukung limit order, jadi kita kirim amount SOL untuk buy
+        const amountToSend = type === 'buy' ? (data.amount * data.price) : data.amount;
+        await onSwap(amountToSend);
       } finally {
         clearTimeout(loadingTimeout);
         setLoadingModal(false);
       }
     } else {
-      // onTrade tidak digunakan untuk buy, karena swap sudah handle
+       toast({ title: "OnSwap function not provided" });
     }
     form.reset();
     setAmountInput('');
@@ -95,12 +95,12 @@ export default function LimitOrderForm({ type, selectedAsset, onTrade, onSwap, p
         </DialogContent>
       </Dialog>
       {/* Tampilkan saldo di atas form */}
-      {type === 'buy' && solBalance !== undefined && (
-        <div className="mb-2 text-xs text-success font-semibold">Your SOL Balance: {solBalance}</div>
-      )}
-      {type === 'sell' && psngBalance !== undefined && (
-        <div className="mb-2 text-xs text-success font-semibold">Your PSNG Balance: {psngBalance}</div>
-      )}
+      <div className="mb-2 text-xs text-muted-foreground">
+        {type === 'buy' 
+          ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
+          : `Balance: ${(psngBalance ?? 0).toFixed(4)} PSNG`
+        }
+      </div>
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
