@@ -71,6 +71,14 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
   }
 
   const handleCopyAddress = (address: string, token: string) => {
+    if (address === "N/A") {
+      toast({
+        variant: "destructive",
+        title: "Address Not Available",
+        description: "The deposit address could not be retrieved.",
+      });
+      return;
+    }
     navigator.clipboard.writeText(address);
     toast({
       title: `${token} Address Copied!`,
@@ -119,8 +127,8 @@ export default function WalletSetupDialog({ isOpen, onOpenChange, solBalance, ps
       // 4. Sign in with custom token
       await signInWithCustomToken(auth, data.customToken);
       
-      setDepositWallet(data.user.depositWallet || "");
-      setPsngDepositWallet(data.user.depositWallet || "");
+      setDepositWallet(data.user.depositWallet || "N/A");
+      setPsngDepositWallet(data.user.depositWallet || "N/A");
       toast({ title: "Login Success", description: "Wallet authenticated and deposit address loaded." });
 
     } catch (e: any) {
