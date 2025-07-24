@@ -37,8 +37,10 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-      if (!selectedAsset) return;
-      setLoading(true);
+      if (!selectedAsset?.id) return;
+      
+      // Only set loading to true when the asset ID actually changes
+      setLoading(true); 
       
       const db = getFirestore();
       
@@ -46,37 +48,43 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
       const bidsQuery = query(
         collection(db, 'orders'), 
         where('type', '==', 'buy'),
-        // orderBy('price', 'desc'), // This requires a composite index. Sorting will be done on the client.
+        // where('assetId', '==', selectedAsset.id) // This would be ideal with a composite index
         limit(50)
       );
       const bidsUnsub = onSnapshot(bidsQuery, (snapshot) => {
         const bidsData = snapshot.docs.map(doc => doc.data() as Order);
-        // Sort on the client side
         bidsData.sort((a, b) => b.price - a.price);
         setBids(bidsData.slice(0, 20));
-        if(loading) setLoading(false);
+        setLoading(false); // Stop loading after first fetch
+      }, (error) => {
+        console.error("Error fetching bids:", error);
+        setLoading(false);
       });
 
       // Listener for Asks (Sell orders)
       const asksQuery = query(
         collection(db, 'orders'), 
         where('type', '==', 'sell'),
-        // orderBy('price', 'asc'), // This requires a composite index. Sorting will be done on the client.
+        // where('assetId', '==', selectedAsset.id)
         limit(50)
       );
       const asksUnsub = onSnapshot(asksQuery, (snapshot) => {
         const asksData = snapshot.docs.map(doc => doc.data() as Order);
-        // Sort on the client side
         asksData.sort((a, b) => a.price - b.price);
         setAsks(asksData.slice(0, 20));
-        if(loading) setLoading(false);
+        setLoading(false); // Stop loading after first fetch
+      }, (error) => {
+        console.error("Error fetching asks:", error);
+        setLoading(false);
       });
 
       return () => {
         bidsUnsub();
         asksUnsub();
       };
-    }, [selectedAsset]);
+    // The key change: Depend only on the asset's ID, not the whole object.
+    // This prevents re-fetching data every time the price changes.
+    }, [selectedAsset?.id]); 
 
     if (loading) {
         return (
