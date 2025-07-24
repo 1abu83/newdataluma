@@ -46,12 +46,14 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
       const bidsQuery = query(
         collection(db, 'orders'), 
         where('type', '==', 'buy'),
-        orderBy('price', 'desc'),
-        limit(20)
+        // orderBy('price', 'desc'), // This requires a composite index. Sorting will be done on the client.
+        limit(50)
       );
       const bidsUnsub = onSnapshot(bidsQuery, (snapshot) => {
         const bidsData = snapshot.docs.map(doc => doc.data() as Order);
-        setBids(bidsData);
+        // Sort on the client side
+        bidsData.sort((a, b) => b.price - a.price);
+        setBids(bidsData.slice(0, 20));
         if(loading) setLoading(false);
       });
 
@@ -59,12 +61,14 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
       const asksQuery = query(
         collection(db, 'orders'), 
         where('type', '==', 'sell'),
-        orderBy('price', 'asc'),
-        limit(20)
+        // orderBy('price', 'asc'), // This requires a composite index. Sorting will be done on the client.
+        limit(50)
       );
       const asksUnsub = onSnapshot(asksQuery, (snapshot) => {
         const asksData = snapshot.docs.map(doc => doc.data() as Order);
-        setAsks(asksData);
+        // Sort on the client side
+        asksData.sort((a, b) => a.price - b.price);
+        setAsks(asksData.slice(0, 20));
         if(loading) setLoading(false);
       });
 
@@ -151,5 +155,3 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
     </Card>
   )
 }
-
-    
