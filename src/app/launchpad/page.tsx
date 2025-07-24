@@ -5,57 +5,19 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
 import Header from '@/components/Header';
 import BottomBar from '@/components/BottomBar';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import './launchpad.css';
-
-const presaleProjects = [
-  {
-    name: 'LUMA',
-    icon: '/lu.png',
-    description: 'LUMA powers the core ecosystem, enabling governance and rewards across the platform.',
-    softCap: 1000,
-    hardCap: 5000,
-    raised: 2345,
-    price: 0.0001,
-  },
-  {
-    name: 'BRICS',
-    icon: '/brics.png',
-    description: 'A decentralized token for emerging market economies, fostering cross-border trade.',
-    softCap: 2000,
-    hardCap: 10000,
-    raised: 4120,
-    price: 0.00025,
-  },
-  {
-    name: 'BLC',
-    icon: '/blc.png',
-    description: 'BlockChain Coin is a foundational layer-1 token designed for scalability and security.',
-    softCap: 5000,
-    hardCap: 25000,
-    raised: 8910,
-    price: 0.0005,
-  },
-];
+import Link from 'next/link';
+import { presaleProjects } from '@/lib/launchpad-data';
 
 export default function LaunchpadPage() {
   const [isMarketBarOpen, setMarketBarOpen] = useState(false);
   const [isWalletSetupOpen, setWalletSetupOpen] = useState(false);
   const [isWalletWithdrawOpen, setWalletWithdrawOpen] = useState(false);
-  const { toast } = useToast();
-
-  const handleContribute = (projectName: string) => {
-    toast({
-      title: 'Contribution Received (DEMO)',
-      description: `Your contribution to ${projectName} has been recorded. This is a UI demonstration.`,
-    });
-  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -94,7 +56,7 @@ export default function LaunchpadPage() {
                 </div>
               </CardHeader>
               <CardContent className="flex-1">
-                <p className="mb-6 text-sm text-muted-foreground">{project.description}</p>
+                <p className="mb-6 text-sm text-muted-foreground">{project.shortDescription}</p>
                 
                 <div className="space-y-2 mb-4">
                     <div className="flex justify-between text-sm font-medium text-muted-foreground">
@@ -119,12 +81,11 @@ export default function LaunchpadPage() {
                 </div>
               </CardContent>
               <CardFooter>
-                <div className="w-full flex items-center gap-2">
-                  <Input type="number" placeholder="SOL Amount" className="flex-1" />
-                  <Button onClick={() => handleContribute(project.name)} className="bg-primary hover:bg-primary/90">
-                    Contribute
-                  </Button>
-                </div>
+                 <Link href={`/launchpad/${project.slug}`} className="w-full">
+                    <Button className="w-full bg-primary hover:bg-primary/90">
+                      View Project
+                    </Button>
+                  </Link>
               </CardFooter>
             </Card>
           ))}
