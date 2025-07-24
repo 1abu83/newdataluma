@@ -49,34 +49,69 @@ export default function Home() {
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
   const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
 
+  // Set initial asset data without price
   useEffect(() => {
-    // Mock assets data since the API is removed.
-    const mockAssets = [
+    const initialAssets = [
       { 
         id: 'PSNG/SOL', 
         name: 'Pasino',
         icon: { src: "/psng.png", alt: "Pasino logo" },
-        price: 0.135,
-        change: 2.5,
-        volume: 1200000,
-        marketCap: 2300000,
-        holders: 15000,
+        price: 0, // Will be updated by the pool listener
+        change: 2.5, // Mock data
+        volume: 1200000, // Mock data
+        marketCap: 2300000, // Mock data
+        holders: 15000, // Mock data
       },
       {
         id: 'LUMA/SOL', 
         name: 'Luma',
         icon: { src: "/lu.png", alt: "Luma logo" },
-        price: 45.78,
+        price: 45.78, // Mock data
         change: 5.8,
         volume: 2500000,
         marketCap: 5800000,
         holders: 42000,
       },
     ];
-    setAssets(mockAssets);
-    setSelectedAsset(mockAssets[0]);
-    setLoading(false);
+    setAssets(initialAssets);
+    setSelectedAsset(initialAssets[0]);
+    // Don't set loading to false here, wait for price data
   }, []);
+
+  // Real-time listener for the liquidity pool to get the price
+  useEffect(() => {
+    const db = getFirestore();
+    const poolRef = doc(db, 'pools', 'PSNG_SOL');
+
+    const unsubscribe = onSnapshot(poolRef, (doc) => {
+      if (doc.exists()) {
+        const { reserveSOL, reservePSNG } = doc.data();
+        if (reservePSNG > 0) {
+          const newPrice = reserveSOL / reservePSNG;
+          
+          setSelectedAsset(prevAsset => {
+            if (prevAsset) {
+              return { ...prevAsset, price: newPrice };
+            }
+            return null;
+          });
+
+          setAssets(prevAssets => {
+             return prevAssets.map(asset => 
+                asset.id === 'PSNG/SOL' ? { ...asset, price: newPrice } : asset
+             );
+          });
+        }
+      }
+      setLoading(false); // Price data is loaded or pool doesn't exist
+    }, (error) => {
+        console.error("Error fetching pool data:", error);
+        setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
 
   useEffect(() => {
     const auth = getAuth();
