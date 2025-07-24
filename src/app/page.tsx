@@ -51,16 +51,16 @@ export default function Home() {
   const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
   const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
 
-  // Set initial asset data without price
+  // Set initial asset data without price, change, or volume
   useEffect(() => {
     const initialAssets = [
       { 
         id: 'PSNG/SOL', 
         name: 'Pasino',
         icon: { src: "/psng.png", alt: "Pasino logo" },
-        price: 0, // Will be updated by the pool listener
-        change: 2.5, // Mock data
-        volume: 1200000, // Mock data
+        price: 0, 
+        change: 0, // Will be updated by the listener
+        volume: 0, // Will be updated by the listener
         marketCap: 2300000, // Mock data
         holders: 15000, // Mock data
       },
@@ -77,10 +77,9 @@ export default function Home() {
     ];
     setAssets(initialAssets);
     setSelectedAsset(initialAssets[0]);
-    // Don't set loading to false here, wait for price data
   }, []);
 
-  // Real-time listener for the price from Realtime Database
+  // Real-time listener for price, volume, and change from Realtime Database
   useEffect(() => {
     const chartRefRtdb = dbRef(rtdb, `charts/SOLPSNG`);
     let unsubscribed = false;
@@ -89,32 +88,50 @@ export default function Home() {
       if (unsubscribed) return;
       const val = snapshot.val();
       if (val) {
-        // Find the most recent candle to get the latest close price
-        const latestTimestamp = Math.max(...Object.keys(val).map(Number));
-        const latestCandle = val[latestTimestamp];
-        
-        if (latestCandle && latestCandle.close) {
-          const newPrice = latestCandle.close;
-          
-          setSelectedAsset(prevAsset => {
-            if (prevAsset) {
-              return { ...prevAsset, price: newPrice };
-            }
-            return null;
-          });
+        // Sort candles by timestamp to ensure correct order
+        const allCandles = Object.entries(val)
+            .map(([timestamp, d]: [string, any]) => ({...d, timestamp: Number(timestamp)}))
+            .sort((a, b) => a.timestamp - b.timestamp);
 
-          setAssets(prevAssets => {
-             return prevAssets.map(asset => 
-                asset.id === 'PSNG/SOL' ? { ...asset, price: newPrice } : asset
-             );
-          });
+        if (allCandles.length > 0) {
+            const latestCandle = allCandles[allCandles.length - 1];
+            const newPrice = latestCandle.close;
+
+            // --- Calculate 24h Volume ---
+            const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+            const recentCandles = allCandles.filter(c => c.timestamp >= oneDayAgo);
+            const volume24h = recentCandles.reduce((sum, candle) => sum + (candle.volume || 0), 0);
+
+            // --- Calculate 24h Change ---
+            let change24h = 0;
+            const candle24hAgo = allCandles.find(c => c.timestamp >= oneDayAgo);
+
+            if (candle24hAgo && candle24hAgo.open > 0) {
+                const price24hAgo = candle24hAgo.open;
+                change24h = ((newPrice - price24hAgo) / price24hAgo) * 100;
+            }
+
+            const updateAsset = (prev: Asset | null) => {
+                if (prev) {
+                    return { ...prev, price: newPrice, volume: volume24h, change: change24h };
+                }
+                return null;
+            }
+
+            setSelectedAsset(updateAsset);
+
+            setAssets(prevAssets => {
+                return prevAssets.map(asset => 
+                    asset.id === 'PSNG/SOL' ? { ...asset, price: newPrice, volume: volume24h, change: change24h } : asset
+                );
+            });
         }
       }
-      setLoading(false); // Price data is loaded or doesn't exist
+      setLoading(false); 
     };
     
     onValue(chartRefRtdb, handleValue, (error) => {
-        console.error("Error fetching price data from RTDB:", error);
+        console.error("Error fetching data from RTDB:", error);
         setLoading(false);
     });
 
@@ -274,3 +291,4 @@ export default function Home() {
     </div>
   );
 }
+
