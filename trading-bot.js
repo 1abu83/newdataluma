@@ -156,24 +156,7 @@ async function initializeBot() {
     });
     console.log(`User ${config.userId} siap digunakan.`);
 
-    // Panggil detectBalance untuk mendapatkan saldo saat ini dari Firestore
-    // Ini adalah cara terbaik untuk menyinkronkan saldo awal
-     await axios.post(`${config.functionsBaseUrl}/detectBalance`, {
-        address: config.userId,
-        userId: config.userId,
-        tokenType: 'SOL',
-    });
-     await axios.post(`${config.functionsBaseUrl}/detectBalance`, {
-        address: config.userId,
-        userId: config.userId,
-        tokenType: 'PSNG',
-        tokenMint: '4DukyTPbC5A66r2t2sJt15A2aA21tSUpn1bE1aB8y7aP' // Ganti dengan token mint PSNG Anda
-    });
-
-
-    // Tambahkan saldo awal (ini adalah endpoint fiktif, Anda perlu membuatnya jika ingin digunakan)
-    // Untuk sekarang, kita asumsikan saldo awal sudah cukup atau akan ditambahkan secara manual
-    // atau melalui fungsi 'detectBalance' jika ada dana di wallet on-chain.
+    // Mengatur saldo awal bot secara lokal tanpa memanggil detectBalance
     state.botSolBalance = config.initialBotBalance.sol;
     state.botPsngBalance = config.initialBotBalance.psng;
     console.log(`Saldo awal bot diatur ke: ${state.botSolBalance} SOL, ${state.botPsngBalance} PSNG`);
