@@ -105,7 +105,7 @@ export default function PriceChart() {
       unsubscribed = true;
       off(chartRefRtdb, "value", handleValue);
     };
-  }, [loading]); // Reruns only on initial load
+  }, []); // Reruns only on initial load
 
   useEffect(() => {
     if (loading || !chartContainerRef.current) return;
@@ -272,5 +272,3 @@ export default function PriceChart() {
     </Card>
   );
 }
-
-    
