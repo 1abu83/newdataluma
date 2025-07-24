@@ -60,7 +60,7 @@ export default function OrderHistory({ selectedAsset, tradeHistory }: OrderHisto
                       {trade.type}
                     </span>
                   </TableCell>
-                  <TableCell className={`text-right truncate ${trade.type === 'Buy' ? 'text-success' : 'text-destructive'}`}>{trade.price.toFixed(4)}</TableCell>
+                  <TableCell className={`text-right truncate ${trade.type === 'Buy' ? 'text-success' : 'text-destructive'}`}>{trade.price.toFixed(8)}</TableCell>
                   <TableCell className="text-right truncate">{trade.amount.toFixed(2)}</TableCell>
                 </TableRow>
               ))}

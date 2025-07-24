@@ -116,7 +116,7 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
                     )}
                     {[...asks].reverse().map((ask, index) => (
                       <TableRow key={index}>
-                        <TableCell className="text-left text-destructive font-medium">{ask.price.toFixed(4)}</TableCell>
+                        <TableCell className="text-left text-destructive font-medium">{ask.price.toFixed(8)}</TableCell>
                         <TableCell className="text-right">{ask.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right hidden sm:table-cell">{(ask.price * ask.amount).toFixed(2)}</TableCell>
                       </TableRow>
@@ -125,7 +125,7 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
                 </Table>
               </div>
               <div className="border-y my-2 py-2">
-                 <h3 className="text-lg font-semibold text-center text-success">{selectedAsset.price.toFixed(4)} {currencyName}</h3>
+                 <h3 className="text-lg font-semibold text-center text-success">{selectedAsset.price.toFixed(8)} {currencyName}</h3>
               </div>
               <div>
                 <Table>
@@ -142,7 +142,7 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
                     )}
                     {bids.map((bid, index) => (
                       <TableRow key={index}>
-                        <TableCell className="text-left text-success font-medium">{bid.price.toFixed(4)}</TableCell>
+                        <TableCell className="text-left text-success font-medium">{bid.price.toFixed(8)}</TableCell>
                         <TableCell className="text-right">{bid.amount.toFixed(2)}</TableCell>
                         <TableCell className="text-right hidden sm:table-cell">{(bid.price * bid.amount).toFixed(2)}</TableCell>
                       </TableRow>

@@ -51,7 +51,7 @@ export default function MarketBar({ isOpen, assets }: MarketBarProps) {
           <div className="text-xs text-muted-foreground">
             Vol: {formatValue(asset.volume)}
           </div>
-          <div className="text-sm font-semibold text-foreground">${asset.price.toFixed(4)}</div>
+          <div className="text-sm font-semibold text-foreground">${asset.price.toFixed(8)}</div>
         </div>
       </div>
     );
@@ -73,7 +73,7 @@ export default function MarketBar({ isOpen, assets }: MarketBarProps) {
           </div>
         </div>
         <div className="text-right">
-          <div className="font-semibold text-foreground">${asset.price.toFixed(4)}</div>
+          <div className="font-semibold text-foreground">${asset.price.toFixed(8)}</div>
           <div className={cn("text-xs", isUp ? 'text-success' : 'text-destructive')}>
             {asset.change > 0 ? '+' : ''}{asset.change.toFixed(2)}%
           </div>

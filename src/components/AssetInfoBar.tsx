@@ -77,7 +77,7 @@ export default function AssetInfoBar({ assets, selectedAsset, onAssetChange, onM
               )}
               <InfoBlock 
                 label="Price"
-                value={`${selectedAsset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4})} SOL`}
+                value={`${selectedAsset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8})} SOL`}
                 change={selectedAsset.change}
               />
             </div>
@@ -86,7 +86,7 @@ export default function AssetInfoBar({ assets, selectedAsset, onAssetChange, onM
               <InfoBlock 
                 icon={<DollarSign className="text-foreground" />} 
                 label="Price"
-                value={`${selectedAsset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4})} SOL`}
+                value={`${selectedAsset.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8})} SOL`}
                 change={selectedAsset.change}
               />
               <Separator orientation="vertical" className="h-1/2" />
