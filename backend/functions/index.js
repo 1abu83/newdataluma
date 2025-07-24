@@ -39,8 +39,8 @@ async function updateChartData(previousPrice, newPrice, volumeSOL, timestamp) {
 
         if (existingCandle) {
             await chartRef.update({
-                high: Math.max(existingCandle.high, newPrice),
-                low: Math.min(existingCandle.low, newPrice),
+                high: Math.max(existingCandle.high, newPrice, previousPrice),
+                low: Math.min(existingCandle.low, newPrice, previousPrice),
                 close: newPrice,
                 volume: existingCandle.volume + volumeSOL,
             });
@@ -99,13 +99,12 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                 let { reserveSOL, reservePSNG } = poolDoc.data();
                 reserveSOL = Number(reserveSOL);
                 reservePSNG = Number(reservePSNG);
-                const currentPrice = reserveSOL / reservePSNG;
+                const previousPrice = reserveSOL / reservePSNG;
 
 
                 const FEE = 0.02;
-                let amountIn, amountOut, tokenIn, tokenOut;
+                let amountIn, amountOut, tokenIn, tokenOut, newReserveSOL, newReservePSNG;
                 const swapTimestamp = Date.now();
-                const previousPrice = reserveSOL / reservePSNG;
 
                 if (direction === 'buy') {
                     // Market Buy: user provides SOL amount
@@ -117,8 +116,8 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                     
                     const amountInAfterFee = amountIn * (1 - FEE);
                     const k = reserveSOL * reservePSNG;
-                    const newReserveSOL = reserveSOL + amountInAfterFee;
-                    const newReservePSNG = k / newReserveSOL;
+                    newReserveSOL = reserveSOL + amountInAfterFee;
+                    newReservePSNG = k / newReserveSOL;
                     amountOut = reservePSNG - newReservePSNG;
 
                     if (amountOut <= 0 || newReservePSNG <= 0) throw new Error('Invalid swap calculation or insufficient liquidity');
@@ -136,8 +135,8 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                     if (userPsng < amountIn) throw new Error('Insufficient PSNG balance');
 
                     const k = reserveSOL * reservePSNG;
-                    const newReservePSNG = reservePSNG + amountIn;
-                    const newReserveSOL = k / newReservePSNG;
+                    newReservePSNG = reservePSNG + amountIn;
+                    newReserveSOL = k / newReservePSNG;
                     amountOut = reserveSOL - newReserveSOL;
                     const amountOutAfterFee = amountOut * (1 - FEE);
                     
@@ -164,9 +163,7 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                 };
                 transaction.set(db.collection('swaps').doc(), swapData);
 
-                const finalPool = await transaction.get(poolRef);
-                const { reserveSOL: finalSOL, reservePSNG: finalPSNG } = finalPool.data();
-                const newPrice = finalSOL / finalPSNG;
+                const newPrice = newReserveSOL / newReservePSNG;
                 const volumeSOL = direction === 'buy' ? amountIn : amountOut;
 
                 return {
