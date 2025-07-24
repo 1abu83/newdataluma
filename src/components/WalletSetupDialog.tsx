@@ -19,6 +19,7 @@ import { Copy } from "lucide-react"
 import { useState, useEffect } from "react"
 import { getAuth, signInWithCustomToken } from "firebase/auth"
 import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { app } from "@/lib/firebase"; // Import the initialized app
 
 // Ganti dengan endpoint backend Anda
 const API_BASE = "https://generatechallenge-xtgnsf4tla-uc.a.run.app".replace(/\/generatechallenge$/, "");
@@ -45,7 +46,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
   // Ambil saldo dari Firestore setelah login sukses
   async function fetchBalances(userId: string) {
     try {
-      const db = getFirestore();
+      const db = getFirestore(app);
       const solDoc = await getDoc(doc(db, "users", userId, "balances", "SOL"));
       const psngDoc = await getDoc(doc(db, "users", userId, "balances", "PSNG"));
       setSolBalance(solDoc.exists() ? solDoc.data().amount : 0);
@@ -89,7 +90,7 @@ export default function WalletSetupDialog({ isOpen, onOpenChange }: WalletSetupD
       if (!loginRes.ok) throw new Error(loginData.error || "Failed to login/signup");
 
       // 2. Login ke Firebase Auth
-      const auth = getAuth();
+      const auth = getAuth(app);
       await signInWithCustomToken(auth, loginData.customToken);
       setIsLoggedIn(true);
       setDepositWallet(loginData.depositWallet || "");

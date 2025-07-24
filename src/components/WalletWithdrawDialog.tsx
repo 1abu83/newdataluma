@@ -1,3 +1,4 @@
+
 "use client"
 
 import {
@@ -17,6 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useState, useEffect } from "react"
 import { getAuth } from "firebase/auth"
 import { getFirestore, doc, getDoc } from "firebase/firestore";
+import { app } from "@/lib/firebase"; // Import the initialized app
 
 // Ganti dengan endpoint backend Anda
 const API_BASE = "https://generatechallenge-xtgnsf4tla-uc.a.run.app".replace(/\/generatechallenge$/, "");
@@ -39,7 +41,7 @@ export default function WalletWithdrawDialog({ isOpen, onOpenChange }: WalletWit
   // Ambil saldo dari Firestore setelah dialog dibuka
   async function fetchBalances(userId: string) {
     try {
-      const db = getFirestore();
+      const db = getFirestore(app);
       const solDoc = await getDoc(doc(db, "users", userId, "balances", "SOL"));
       const psngDoc = await getDoc(doc(db, "users", userId, "balances", "PSNG"));
       setSolBalance(solDoc.exists() ? solDoc.data().amount : 0);
@@ -52,7 +54,7 @@ export default function WalletWithdrawDialog({ isOpen, onOpenChange }: WalletWit
 
   // Cek status login
   useEffect(() => {
-    const auth = getAuth();
+    const auth = getAuth(app);
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setIsLoggedIn(!!user);
       if (user && publicKey) {

@@ -109,6 +109,9 @@ export default function Home() {
             if (candle24hAgo && candle24hAgo.open > 0) {
                 const price24hAgo = candle24hAgo.open;
                 change24h = ((newPrice - price24hAgo) / price24hAgo) * 100;
+            } else if (allCandles.length > 1) {
+                const firstCandle = allCandles[0];
+                change24h = ((newPrice - firstCandle.open) / firstCandle.open) * 100;
             }
 
             const updateAsset = (prev: Asset | null) => {
@@ -143,7 +146,7 @@ export default function Home() {
 
 
   useEffect(() => {
-    const auth = getAuth();
+    const auth = getAuth(app);
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -156,7 +159,7 @@ export default function Home() {
   // Real-time balance listener
   useEffect(() => {
     if (publicKey) {
-      const db = getFirestore();
+      const db = getFirestore(app);
       
       const solBalanceUnsub = onSnapshot(
         doc(db, "users", publicKey.toBase58(), "balances", "SOL"),
@@ -180,7 +183,7 @@ export default function Home() {
 
   // Fetch swap/trade data from Firestore using a real-time listener
   useEffect(() => {
-    const db = getFirestore();
+    const db = getFirestore(app);
     const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
     
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
