@@ -1,34 +1,16 @@
 
-"use client"
+"use client";
 
 import React, { useEffect, useRef, useState, useMemo } from 'react';
-import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineData, SeriesMarker } from 'lightweight-charts';
+import { createChart, IChartApi, ISeriesApi, CandlestickData, UTCTimestamp, LineData } from 'lightweight-charts';
 import { Card, CardContent } from "@/components/ui/card";
-import type { Asset } from "@/app/page";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { LineChart } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
-
-type ChartDataPoint = {
-  time: UTCTimestamp;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-};
-
-export type TradeMarker = {
-  time: number;
-  price: number;
-  type: 'buy' | 'sell';
-}
-
-interface PriceChartProps {
-  selectedAsset: Asset;
-  tradeMarkers: TradeMarker[];
-}
+import { rtdb } from "@/lib/firebase";
+import { ref as dbRef, onValue, off } from "firebase/database";
 
 const timeframes = [
     { label: '1m', value: '1' },
@@ -56,8 +38,7 @@ const calculateSMA = (data: CandlestickData[], period: number): LineData[] => {
     return smaData;
 };
 
-
-export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartProps) {
+export default function PriceChart() {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -72,45 +53,62 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
   const chartHeight = useMemo(() => isMobile ? 300 : 400, [isMobile]);
 
   useEffect(() => {
-    if (!selectedAsset) return;
-
     setLoading(true);
-    let isMounted = true;
-    
-    const fetchData = async () => {
-      try {
-        const response = await fetch(`/api/market-data?type=assetData&assetId=${selectedAsset.id}&timeframe=${activeTimeframe}`);
-        if (!response.ok) {
-          throw new Error('Failed to fetch chart data');
-        }
-        const data = await response.json();
+    const symbol = "SOLPSNG"; // Hardcode to always fetch data from RTDB
+    const chartRefRtdb = dbRef(rtdb, `charts/${symbol}`);
+    let unsubscribed = false;
+
+    const handleValue = (snapshot: any) => {
+      if (unsubscribed) return;
+      const val = snapshot.val();
+      if (val) {
+        const arr = Object.entries(val)
+          .map(([timestamp, d]: [string, any]) => ({
+            time: (Number(timestamp) / 1000) as UTCTimestamp, // Convert ms to seconds
+            open: d.open,
+            high: d.high,
+            low: d.low,
+            close: d.close,
+            volume: d.volume,
+          }))
+          .sort((a, b) => a.time - b.time); // Ensure data is sorted
         
-        if (isMounted) {
-            const formattedData: CandlestickData[] = data.priceChart.map((d: ChartDataPoint) => ({
-              time: d.time,
-              open: d.open,
-              high: d.high,
-              low: d.low,
-              close: d.close,
-            }));
-            setChartData(formattedData);
-            if (loading) setLoading(false);
+        if (seriesRef.current) {
+            // If chart exists, update or set data
+            if (chartData.length > 0 && arr.length > 0) {
+                const lastExistingCandle = chartData[chartData.length - 1];
+                const newCandles = arr.filter(c => c.time >= lastExistingCandle.time);
+                
+                newCandles.forEach(candle => {
+                    if (candle.time === lastExistingCandle.time) {
+                        seriesRef.current?.update(candle); // Update the last candle
+                    } else {
+                        seriesRef.current?.update(candle); // Add new candle
+                    }
+                });
+
+            } else {
+                seriesRef.current?.setData(arr);
+            }
         }
-      } catch (error) {
-        console.error(error);
-        if (isMounted && loading) setLoading(false);
+        setChartData(arr); // Keep local state in sync
+
+      } else {
+        setChartData([]);
       }
+      if (loading) setLoading(false);
     };
-    
-    fetchData();
-    // Hapus interval polling
+
+    onValue(chartRefRtdb, handleValue);
+
     return () => {
-        isMounted = false;
+      unsubscribed = true;
+      off(chartRefRtdb, "value", handleValue);
     };
-  }, [selectedAsset, activeTimeframe]);
+  }, [loading]); // Reruns only on initial load
 
   useEffect(() => {
-    if (loading || !chartContainerRef.current || chartData.length === 0) return;
+    if (loading || !chartContainerRef.current) return;
 
     const style = getComputedStyle(document.body);
     
@@ -131,7 +129,7 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
           width: chartContainerRef.current.clientWidth,
           height: chartHeight,
           layout: {
-            background: { type: 'solid', color: 'transparent' },
+            background: { color: 'transparent' },
             textColor: getColor('--foreground'),
           },
           grid: {
@@ -156,17 +154,20 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
         seriesRef.current = chartRef.current.addCandlestickSeries({
             upColor: getColor('--success'),
             downColor: getColor('--destructive'),
-            borderDownColor: getColor('--destructive'),
             borderUpColor: getColor('--success'),
-            wickDownColor: getColor('--destructive'),
+            borderDownColor: getColor('--destructive'),
             wickUpColor: getColor('--success'),
+            wickDownColor: getColor('--destructive'),
         });
+
+        if (chartData.length > 0) {
+          seriesRef.current.setData(chartData);
+        }
+
     } else {
         chartRef.current.applyOptions({ 
           height: chartHeight,
-          rightPriceScale: {
-            visible: true,
-          }
+          width: chartContainerRef.current.clientWidth,
         });
     }
     
@@ -174,7 +175,7 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
         watermark: {
             color: 'rgba(118, 128, 140, 0.4)',
             visible: true,
-            text: selectedAsset.id,
+            text: "SOLPSNG",
             fontSize: 24,
             horzAlign: 'left',
             vertAlign: 'top',
@@ -185,19 +186,6 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
         }
     });
 
-    seriesRef.current?.setData(chartData);
-
-    const markers: SeriesMarker<UTCTimestamp>[] = tradeMarkers.map(marker => ({
-      time: marker.time as UTCTimestamp,
-      position: marker.type === 'buy' ? 'belowBar' : 'aboveBar',
-      color: marker.type === 'buy' ? getColor('--success') : getColor('--destructive'),
-      shape: marker.type === 'buy' ? 'arrowUp' : 'arrowDown',
-      text: marker.type === 'buy' ? 'Buy' : 'Sell',
-      size: 1,
-    }));
-
-    seriesRef.current?.setMarkers(markers);
-    
     if (showSMA) {
         if (!smaSeriesRef.current) {
             smaSeriesRef.current = chartRef.current.addLineSeries({
@@ -214,7 +202,6 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
         }
     }
 
-
     const handleResize = () => {
       chartRef.current?.applyOptions({ width: chartContainerRef.current!.clientWidth });
     };
@@ -224,7 +211,7 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [loading, chartData, selectedAsset.id, activeTimeframe, showSMA, chartHeight, isMobile, tradeMarkers]);
+  }, [loading, chartData, activeTimeframe, showSMA, chartHeight, isMobile]);
   
   useEffect(() => {
       return () => {
@@ -234,7 +221,6 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
           }
       }
   }, []);
-
 
   if (loading && chartData.length === 0) {
     return (
@@ -251,7 +237,7 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
 
   return (
     <Card className="rounded-none md:rounded-lg">
-      <CardContent className="relative pt-6 pr-0 md:pr-6">
+      <CardContent className="relative pt-6 px-2 md:px-6">
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 flex-wrap">
           {timeframes.map((tf) => (
             <Button
@@ -286,3 +272,5 @@ export default function PriceChart({ selectedAsset, tradeMarkers }: PriceChartPr
     </Card>
   );
 }
+
+    

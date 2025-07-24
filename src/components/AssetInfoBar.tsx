@@ -37,7 +37,7 @@ export default function AssetInfoBar({ assets, selectedAsset, onAssetChange, onM
   
   return (
     <div className="border-b border-t border-border/40 bg-muted/20">
-      <div className="container mx-auto max-w-screen-2xl">
+      <div className="container mx-auto max-w-screen-2xl px-2 md:px-6 lg:px-8">
         <div className="h-20 flex items-center">
             <div className="flex items-center gap-4">
               <DropdownMenu>

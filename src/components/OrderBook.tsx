@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/table"
 import type { Asset } from "@/app/page";
 import { Skeleton } from "./ui/skeleton";
+import { getFirestore, collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
+
 
 type Order = {
   price: number;
@@ -25,48 +27,54 @@ type Order = {
   total: number;
 };
 
-type OrderBookData = {
-  bids: Order[];
-  asks: Order[];
-};
-
-
 interface OrderBookProps {
     selectedAsset: Asset;
 }
 
 export default function OrderBook({ selectedAsset }: OrderBookProps) {
-    const [orderBookData, setOrderBookData] = useState<OrderBookData | null>(null);
+    const [bids, setBids] = useState<Order[]>([]);
+    const [asks, setAsks] = useState<Order[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
       if (!selectedAsset) return;
+      setLoading(true);
+      
+      const db = getFirestore();
+      
+      // Listener for Bids (Buy orders)
+      const bidsQuery = query(
+        collection(db, 'orders'), 
+        where('type', '==', 'buy'),
+        orderBy('price', 'desc'),
+        limit(20)
+      );
+      const bidsUnsub = onSnapshot(bidsQuery, (snapshot) => {
+        const bidsData = snapshot.docs.map(doc => doc.data() as Order);
+        setBids(bidsData);
+        if(loading) setLoading(false);
+      });
 
-      let isMounted = true;
-      const fetchOrderBook = async () => {
-        try {
-          const response = await fetch(`/api/market-data?type=assetData&assetId=${selectedAsset.id}`);
-          if (!response.ok) {
-            throw new Error('Failed to fetch order book data');
-          }
-          const data = await response.json();
-          if (isMounted) {
-            setOrderBookData(data.orderBook);
-            if(loading) setLoading(false);
-          }
-        } catch (error) {
-          console.error(error);
-          if (isMounted && loading) setLoading(false);
-        }
-      };
-      fetchOrderBook();
-      // Hapus interval polling
+      // Listener for Asks (Sell orders)
+      const asksQuery = query(
+        collection(db, 'orders'), 
+        where('type', '==', 'sell'),
+        orderBy('price', 'asc'),
+        limit(20)
+      );
+      const asksUnsub = onSnapshot(asksQuery, (snapshot) => {
+        const asksData = snapshot.docs.map(doc => doc.data() as Order);
+        setAsks(asksData);
+        if(loading) setLoading(false);
+      });
+
       return () => {
-        isMounted = false;
+        bidsUnsub();
+        asksUnsub();
       };
     }, [selectedAsset]);
 
-    if (loading || !orderBookData) {
+    if (loading) {
         return (
             <Card>
                 <CardHeader>
@@ -79,7 +87,6 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
         )
     }
 
-    const { bids, asks } = orderBookData;
     const assetName = selectedAsset.id.split('/')[0];
     const currencyName = selectedAsset.id.split('/')[1];
 
@@ -100,18 +107,21 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {asks.length === 0 && (
+                      <TableRow><TableCell colSpan={3} className="text-center h-24">No sell orders</TableCell></TableRow>
+                    )}
                     {[...asks].reverse().map((ask, index) => (
                       <TableRow key={index}>
                         <TableCell className="text-left text-destructive font-medium">{ask.price.toFixed(4)}</TableCell>
                         <TableCell className="text-right">{ask.amount.toFixed(2)}</TableCell>
-                        <TableCell className="text-right hidden sm:table-cell">{ask.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">{(ask.price * ask.amount).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
               <div className="border-y my-2 py-2">
-                 <h3 className="text-lg font-semibold text-center">{selectedAsset.price.toFixed(4)} {currencyName}</h3>
+                 <h3 className="text-lg font-semibold text-center text-success">{selectedAsset.price.toFixed(4)} {currencyName}</h3>
               </div>
               <div>
                 <Table>
@@ -123,11 +133,14 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
+                    {bids.length === 0 && (
+                       <TableRow><TableCell colSpan={3} className="text-center h-24">No buy orders</TableCell></TableRow>
+                    )}
                     {bids.map((bid, index) => (
                       <TableRow key={index}>
                         <TableCell className="text-left text-success font-medium">{bid.price.toFixed(4)}</TableCell>
                         <TableCell className="text-right">{bid.amount.toFixed(2)}</TableCell>
-                        <TableCell className="text-right hidden sm:table-cell">{bid.total.toFixed(2)}</TableCell>
+                        <TableCell className="text-right hidden sm:table-cell">{(bid.price * bid.amount).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -138,3 +151,5 @@ export default function OrderBook({ selectedAsset }: OrderBookProps) {
     </Card>
   )
 }
+
+    

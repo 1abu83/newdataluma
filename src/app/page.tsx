@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import PriceChart, { TradeMarker } from '@/components/PriceChart';
+import PriceChart from '@/components/PriceChart';
 import TradingForm from '@/components/TradingForm';
 import OrderBook from '@/components/OrderBook';
 import OrderHistory from '@/components/OrderHistory';
@@ -13,10 +13,10 @@ import BottomBar from '@/components/BottomBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
+import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
-
 
 export interface Asset {
   id: string;
@@ -39,7 +39,7 @@ export default function Home() {
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [loading, setLoading] = useState(true);
   const [isWalletSetupOpen, setWalletSetupOpen] = useState(false);
-  const [tradeMarkers, setTradeMarkers] = useState<TradeMarker[]>([]);
+  const [isWalletWithdrawOpen, setWalletWithdrawOpen] = useState(false);
   const [tradeHistory, setTradeHistory] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
   const { publicKey } = useWallet();
@@ -49,25 +49,32 @@ export default function Home() {
   const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
 
   useEffect(() => {
-    async function fetchAssets() {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/market-data?type=assets');
-        if (!response.ok) {
-          throw new Error('Failed to fetch assets');
-        }
-        const data: Asset[] = await response.json();
-        setAssets(data);
-        if (data.length > 0) {
-          setSelectedAsset(data[0]);
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchAssets();
+    // Mock assets data since the API is removed.
+    const mockAssets = [
+      { 
+        id: 'PSNG/SOL', 
+        name: 'Pasino',
+        icon: { src: "/psng.png", alt: "Pasino logo" },
+        price: 0.135,
+        change: 2.5,
+        volume: 1200000,
+        marketCap: 2300000,
+        holders: 15000,
+      },
+      {
+        id: 'LUMA/SOL', 
+        name: 'Luma',
+        icon: { src: "/lu.png", alt: "Luma logo" },
+        price: 45.78,
+        change: 5.8,
+        volume: 2500000,
+        marketCap: 5800000,
+        holders: 42000,
+      },
+    ];
+    setAssets(mockAssets);
+    setSelectedAsset(mockAssets[0]);
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -106,13 +113,6 @@ export default function Home() {
     }
   }, [publicKey]);
 
-
-  useEffect(() => {
-    // When the selected asset changes, clear the markers from the previous asset.
-    setTradeMarkers([]);
-  }, [selectedAsset]);
-
-
   // Fetch swap/trade data from Firestore using a real-time listener
   useEffect(() => {
     const db = getFirestore();
@@ -120,59 +120,26 @@ export default function Home() {
     
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
         // Filter out documents that have pending writes to avoid processing incomplete data
-        const docsWithTimestamp = snapshot.docs.filter(doc => !doc.metadata.hasPendingWrites);
+        const docsWithTimestamp = snapshot.docs.filter(doc => !doc.metadata.hasPendingWrites && doc.data().timestamp);
 
-        const { markers, history } = docsWithTimestamp.reduce(
-            (acc, sDoc) => {
-                const s = sDoc.data();
-                try {
-                    // This check is now more robust. It ensures timestamp exists and has the toDate method.
-                    if (!s.timestamp || typeof s.timestamp.toDate !== 'function') {
-                        return acc;
-                    }
-
-                    // Safely convert timestamp
-                    const date = s.timestamp.toDate(); 
-                    const isoDateString = date.toISOString();
-                    const unixTimestamp = Math.floor(date.getTime() / 1000);
-
-                    // Safely parse price, defaulting to calculated if not present
-                    const price = s.exchangeRate 
+        const history = docsWithTimestamp.map(sDoc => {
+          const s = sDoc.data();
+          const date = new Date(s.timestamp);
+          const price = s.exchangeRate 
                       ? parseFloat(s.exchangeRate) 
                       : (s.direction === 'buy' ? (s.amountIn / s.amountOut) : (s.amountOut / s.amountIn));
+          const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
 
-                    if (isNaN(price)) return acc; // Skip if price is not a number
-
-                    const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
-                    
-                    acc.markers.push({
-                        time: unixTimestamp,
-                        price: price,
-                        type: s.direction
-                    });
-
-                    acc.history.push({
-                        date: isoDateString,
-                        pair: 'PSNG/SOL',
-                        type: s.direction === 'buy' ? 'Buy' : 'Sell',
-                        price: price,
-                        amount: amount,
-                        total: s.amountIn,
-                    });
-
-                } catch (error) {
-                    // This will catch any other unforseen errors during processing
-                    console.warn('Skipping a swap record due to processing error:', s, error);
-                }
-                return acc;
-            },
-            { markers: [] as TradeMarker[], history: [] as any[] }
-        );
-      
-        // Sort markers by time in ascending order before setting state
-        const sortedMarkers = markers.sort((a, b) => a.time - b.time);
-        setTradeMarkers(sortedMarkers);
-
+          return {
+            date: date.toISOString(),
+            pair: 'PSNG/SOL',
+            type: s.direction === 'buy' ? 'Buy' : 'Sell',
+            price: isNaN(price) ? 0 : price,
+            amount: amount,
+            total: s.amountIn,
+          };
+        });
+        
         setTradeHistory(history);
     });
 
@@ -187,6 +154,7 @@ export default function Home() {
           isMarketBarOpen={isMarketBarOpen} 
           onMarketToggle={() => setMarketBarOpen(!isMarketBarOpen)} 
           onDepositClick={() => setWalletSetupOpen(true)}
+          onWithdrawClick={() => setWalletWithdrawOpen(true)}
         />
         <div className="container mx-auto max-w-screen-2xl p-4">
            <Skeleton className="h-20 w-full mb-4" />
@@ -214,10 +182,15 @@ export default function Home() {
         isOpen={isWalletSetupOpen} 
         onOpenChange={setWalletSetupOpen}
       />
+      <WalletWithdrawDialog
+        isOpen={isWalletWithdrawOpen}
+        onOpenChange={setWalletWithdrawOpen}
+      />
       <Header 
         isMarketBarOpen={isMarketBarOpen} 
         onMarketToggle={() => setMarketBarOpen(!isMarketBarOpen)}
         onDepositClick={() => setWalletSetupOpen(true)}
+        onWithdrawClick={() => setWalletWithdrawOpen(true)}
       />
       <div className="flex-1 pb-20 md:pb-0">
         <MarketBar isOpen={isMarketBarOpen} />
@@ -233,7 +206,7 @@ export default function Home() {
               <DrawingToolbar />
             </div>
             <div className="flex-1">
-              <PriceChart selectedAsset={selectedAsset} tradeMarkers={tradeMarkers} />
+              <PriceChart />
             </div>
           </div>
           <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 mt-6 px-4 md:px-0">
@@ -252,3 +225,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

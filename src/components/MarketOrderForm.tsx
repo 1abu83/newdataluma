@@ -7,9 +7,6 @@ import { z } from "zod"
 import { cn } from "@/lib/utils"
 import { useState } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { RefreshCw } from "lucide-react";
-import { getFirestore, doc, getDoc } from "firebase/firestore";
 
 import { Button } from "@/components/ui/button"
 import {
@@ -21,7 +18,6 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
-import { useToast } from "@/hooks/use-toast"
 
 const FormSchema = z.object({
   amount: z.coerce.number().positive({ message: "Amount must be positive." }),
@@ -36,16 +32,12 @@ interface Asset {
 interface MarketOrderFormProps {
   type: 'buy' | 'sell';
   selectedAsset: Asset;
+  onSwap?: (amount: number) => Promise<void>;
   solBalance?: number;
   psngBalance?: number;
 }
 
-const PSNG_MINT_ADDRESS = "Gh9ZwEmdLJ8DscKNTkTqPbNwLNNBjuSzaG9Vp2KGtKJr";
-const DETECT_BALANCE_ENDPOINT = "https://detectbalance-xtgnsf4tla-uc.a.run.app";
-
-export default function MarketOrderForm({ type, selectedAsset, solBalance, psngBalance }: MarketOrderFormProps) {
-  const { toast } = useToast()
-  const { publicKey } = useWallet();
+export default function MarketOrderForm({ type, selectedAsset, onSwap, solBalance, psngBalance }: MarketOrderFormProps) {
   const form = useForm<z.infer<typeof FormSchema>>({
     resolver: zodResolver(FormSchema),
     defaultValues: {
@@ -56,106 +48,37 @@ export default function MarketOrderForm({ type, selectedAsset, solBalance, psngB
   const assetName = selectedAsset.id.split('/')[0];
   const [loadingModal, setLoadingModal] = useState(false);
   const [amountInput, setAmountInput] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const FEE = 0.02;
 
+  // Estimasi jumlah yang didapat
   let estimatedReceived = null;
   if (amountInput) {
     const amount = Number(amountInput);
     if (!isNaN(amount) && amount > 0) {
       if (type === 'buy') {
+        // Buy: user isi amount SOL, dapat PSNG
         const price = selectedAsset.price;
         estimatedReceived = (amount / price) * (1 - FEE);
       } else {
+        // Sell: user isi amount PSNG, dapat SOL
         const price = selectedAsset.price;
         estimatedReceived = amount * price * (1 - FEE);
       }
     }
   }
-  
-  async function handleSwap(amount: number) {
-    if (!publicKey) {
-      toast({ variant: "destructive", title: "Wallet not connected", description: "Please connect your wallet first." });
-      return;
-    }
-    setLoadingModal(true);
-    try {
-      const response = await fetch("https://swap-xtgnsf4tla-uc.a.run.app", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: publicKey.toBase58(),
-          direction: type,
-          amount: Number(amount)
-        })
-      });
-      const data = await response.json();
-      if (response.ok && data.success) {
-        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `You ${type === 'buy' ? 'bought' : 'sold'} ${data.amountOut.toFixed(4)} ${type === 'buy' ? assetName : 'SOL'}!` });
-        form.reset();
-        setAmountInput('');
-      } else {
-        throw new Error(data.error || "Unknown error during swap");
-      }
-    } catch (e: any) {
-      toast({ variant: "destructive", title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
-    } finally {
+
+  async function onSubmit(data: z.infer<typeof FormSchema>) {
+    if (onSwap) {
+      setLoadingModal(true);
+      try {
+        await onSwap(Number(data.amount));
+      } finally {
         setLoadingModal(false);
+      }
     }
+    form.reset();
+    setAmountInput('');
   }
-
-  const handleRefreshBalance = async () => {
-    if (!publicKey) {
-        toast({ variant: "destructive", title: "Error", description: "Please connect your wallet." });
-        return;
-    }
-    const db = getFirestore();
-    const userDocRef = doc(db, "users", publicKey.toBase58());
-    const userDoc = await getDoc(userDocRef);
-
-    if (!userDoc.exists()) {
-       toast({ variant: "destructive", title: "Error", description: "User document not found." });
-       return;
-    }
-
-    const depositWallet = userDoc.data().depositWallet;
-    if (!depositWallet) {
-       toast({ variant: "destructive", title: "Error", description: "Deposit wallet not found. Please re-login." });
-       return;
-    }
-
-    setRefreshing(true);
-    try {
-        const tokenType = type === 'buy' ? 'SOL' : 'PSNG';
-        const body: { userId: string, address: string, tokenType: string, tokenMint?: string } = {
-            userId: publicKey.toBase58(),
-            address: depositWallet,
-            tokenType: tokenType,
-        };
-
-        if (tokenType === 'PSNG') {
-            body.tokenMint = PSNG_MINT_ADDRESS;
-        }
-
-        const response = await fetch(DETECT_BALANCE_ENDPOINT, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body)
-        });
-
-        const data = await response.json();
-        if (!response.ok || !data.success) {
-            throw new Error(data.error || "Failed to refresh balance.");
-        }
-
-        toast({ title: `${tokenType} Balance Refresh`, description: "Your balance is being updated." });
-    } catch (e: any) {
-        toast({ variant: "destructive", title: "Refresh Failed", description: e.message || String(e) });
-    } finally {
-        setRefreshing(false);
-    }
-  };
-
 
   return (
     <>
@@ -165,17 +88,14 @@ export default function MarketOrderForm({ type, selectedAsset, solBalance, psngB
           <div className="text-center font-semibold">Processing your {type === 'buy' ? 'Buy' : 'Sell'} Order...<br/>Please wait.</div>
         </DialogContent>
       </Dialog>
-       <div className="flex items-center mb-2 text-xs text-muted-foreground">
-        {type === 'buy' 
-          ? `Balance: ${(solBalance ?? 0).toFixed(4)} SOL` 
-          : `Balance: ${(psngBalance ?? 0).toFixed(4)} ${assetName}`
-        }
-        <Button variant="ghost" size="icon" className="h-5 w-5 ml-1" onClick={handleRefreshBalance} disabled={refreshing}>
-            <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
-        </Button>
-      </div>
+        {type === 'buy' && solBalance !== undefined && (
+            <div className="mb-2 text-xs text-success font-semibold">Your SOL Balance: {solBalance.toFixed(4)}</div>
+        )}
+        {type === 'sell' && psngBalance !== undefined && (
+            <div className="mb-2 text-xs text-success font-semibold">Your PSNG Balance: {psngBalance.toFixed(4)}</div>
+        )}
       <Form {...form}>
-        <form onSubmit={form.handleSubmit((data) => handleSwap(data.amount))} className="space-y-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
           <FormField
             control={form.control}
             name="amount"
