@@ -16,7 +16,7 @@ import WalletSetupDialog from '@/components/WalletSetupDialog';
 import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, Timestamp } from 'firebase/firestore';
 import { app } from '@/lib/firebase'; // Import app to ensure initialization
 
 export interface Asset {
@@ -120,25 +120,26 @@ export default function Home() {
     const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
     
     const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-        // Filter out documents that have pending writes to avoid processing incomplete data
-        const docsWithTimestamp = snapshot.docs.filter(doc => !doc.metadata.hasPendingWrites && doc.data().timestamp);
-
-        const history = docsWithTimestamp.map(sDoc => {
-          const s = sDoc.data();
-          const date = new Date(s.timestamp);
-          const price = s.exchangeRate 
-                      ? parseFloat(s.exchangeRate) 
-                      : (s.direction === 'buy' ? (s.amountIn / s.amountOut) : (s.amountOut / s.amountIn));
-          const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
-
-          return {
-            date: date.toISOString(),
-            pair: 'PSNG/SOL',
-            type: s.direction === 'buy' ? 'Buy' : 'Sell',
-            price: isNaN(price) ? 0 : price,
-            amount: amount,
-            total: s.amountIn,
-          };
+        const history = snapshot.docs
+          .filter(doc => !doc.metadata.hasPendingWrites && doc.data().timestamp)
+          .map(sDoc => {
+            const s = sDoc.data();
+            // Firestore timestamps need to be converted to JS Date objects
+            const date = s.timestamp instanceof Timestamp ? s.timestamp.toDate() : new Date(s.timestamp);
+            
+            const price = s.exchangeRate 
+                        ? parseFloat(s.exchangeRate) 
+                        : (s.direction === 'buy' ? (s.amountIn / s.amountOut) : (s.amountOut / s.amountIn));
+            const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
+  
+            return {
+              date: date.toISOString(),
+              pair: 'PSNG/SOL',
+              type: s.direction === 'buy' ? 'Buy' : 'Sell',
+              price: isNaN(price) ? 0 : price,
+              amount: amount,
+              total: s.amountIn,
+            };
         });
         
         setTradeHistory(history);
@@ -226,5 +227,3 @@ export default function Home() {
     </div>
   );
 }
-
-    
