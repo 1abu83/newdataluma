@@ -1,13 +1,14 @@
+
 "use client";
 
-import { LayoutGrid, CandlestickChart, Repeat, Wallet } from 'lucide-react';
+import { LayoutGrid, CandlestickChart, Repeat, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '#', icon: LayoutGrid, label: 'Dashboard' },
   { href: '#', icon: CandlestickChart, label: 'Markets', active: true },
   { href: '#', icon: Repeat, label: 'Trade' },
-  { href: '#', label: 'Wallet', icon: Wallet },
+  { href: '#', label: 'Launchpad', icon: Rocket },
 ];
 
 export default function BottomBar() {

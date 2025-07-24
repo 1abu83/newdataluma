@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import { ChevronDown, TrendingUp, Wallet, ArrowDownLeft, ArrowUpRight, Menu } from 'lucide-react';
+import { ChevronDown, TrendingUp, Wallet, ArrowDownLeft, ArrowUpRight, Menu, Rocket } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,7 +53,7 @@ export default function Header({ isMarketBarOpen, onMarketToggle, onDepositClick
               <ChevronDown className={cn("h-4 w-4 transition-transform", isMarketBarOpen && "rotate-180")} />
             </button>
             <a href="#" className="transition-colors hover:text-foreground">Trade</a>
-            <a href="#" className="transition-colors hover:text-foreground">Wallet</a>
+            <a href="#" className="transition-colors hover:text-foreground">Launchpad</a>
           </nav>
           <div className="md:hidden">
             {/* Menu dropdown dihapus untuk tampilan mobile */}
