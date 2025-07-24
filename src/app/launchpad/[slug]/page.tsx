@@ -15,7 +15,7 @@ import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import { presaleProjects } from '@/lib/launchpad-data';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { Twitter, Telegram, Globe, Users, Target } from 'lucide-react';
+import { Twitter, Send, Globe, Users, Target } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import '../launchpad.css';
 
@@ -153,7 +153,7 @@ export default function ProjectDetailPage({ params }: { params: { slug: string }
                  </CardHeader>
                  <CardContent className="flex items-center justify-around">
                     <Link href={project.socials.twitter} target="_blank" className="text-muted-foreground hover:text-foreground"><Twitter className="h-6 w-6" /></Link>
-                    <Link href={project.socials.telegram} target="_blank" className="text-muted-foreground hover:text-foreground"><Telegram className="h-6 w-6" /></Link>
+                    <Link href={project.socials.telegram} target="_blank" className="text-muted-foreground hover:text-foreground"><Send className="h-6 w-6" /></Link>
                     <Link href={project.socials.website} target="_blank" className="text-muted-foreground hover:text-foreground"><Globe className="h-6 w-6" /></Link>
                  </CardContent>
              </Card>
