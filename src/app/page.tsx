@@ -17,6 +17,7 @@ import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { app } from '@/lib/firebase'; // Import app to ensure initialization
 
 export interface Asset {
   id: string;
@@ -193,7 +194,7 @@ export default function Home() {
         onWithdrawClick={() => setWalletWithdrawOpen(true)}
       />
       <div className="flex-1 pb-20 md:pb-0">
-        <MarketBar isOpen={isMarketBarOpen} />
+        <MarketBar isOpen={isMarketBarOpen} assets={assets} />
         <AssetInfoBar 
           assets={assets}
           selectedAsset={selectedAsset}

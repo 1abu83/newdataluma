@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 
 interface MarketBarProps {
   isOpen: boolean;
+  assets: Asset[];
 }
 
 const formatValue = (value: number) => {
@@ -27,31 +28,9 @@ const formatValue = (value: number) => {
 };
 
 
-export default function MarketBar({ isOpen }: MarketBarProps) {
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [loading, setLoading] = useState(true);
+export default function MarketBar({ isOpen, assets }: MarketBarProps) {
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    const fetchAssets = async () => {
-        try {
-            const response = await fetch('/api/market-data?type=assets');
-            if (!response.ok) {
-                throw new Error('Failed to fetch assets');
-            }
-            const data: Asset[] = await response.json();
-            setAssets(data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            if (loading) setLoading(false);
-        }
-    };
-
-    fetchAssets();
-    // Hapus interval polling
-    return () => {};
-  }, []);
+  const loading = assets.length === 0;
 
   const renderMobileAsset = (asset: Asset) => {
     const isUp = asset.change >= 0;
