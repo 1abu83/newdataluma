@@ -175,6 +175,7 @@ async function initializeBot() {
   }
 }
 
+
 /**
  * Fungsi utama untuk menjalankan bot.
  */
