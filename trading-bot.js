@@ -20,7 +20,7 @@ const config = {
     psng: 10000000,
   },
   // Persentase dari total likuiditas yang digunakan untuk menentukan ukuran trade
-  tradeSizePercentage: 0.005, // 0.5% dari total SOL di pool per trade
+  tradeSizePercentage: 0.02, // 2% dari total SOL di pool per trade (dinaikkan dari 0.5%)
 };
 
 // --- State Internal Bot ---
@@ -121,22 +121,27 @@ async function performSwap() {
       amount,
     });
     
-    // Update state internal bot
-    if (direction === 'buy') {
-      state.botSolBalance -= amount;
-      state.botPsngBalance += response.data.amountOut;
-      state.poolSol += amount;
-      state.poolPsng -= response.data.amountOut;
-    } else { // sell
-      state.botPsngBalance -= amount;
-      state.botSolBalance += response.data.amountOut;
-      state.poolPsng += amount;
-      state.poolSol -= response.data.amountOut;
-    }
+    // Update state internal bot berdasarkan response yang benar dari server
+    if (response.data.success) {
+      const { amountIn, amountOut } = response.data;
+      if (direction === 'buy') {
+        state.botSolBalance -= amountIn;
+        state.botPsngBalance += amountOut;
+        state.poolSol += amountIn; // Perkiraan, pool di server yang akurat
+        state.poolPsng -= amountOut;
+      } else { // sell
+        state.botPsngBalance -= amountIn;
+        state.botSolBalance += amountOut;
+        state.poolPsng += amountIn;
+        state.poolSol -= amountOut;
+      }
 
-    console.log(`  -> Berhasil: Dapat ${response.data.amountOut.toFixed(4)} ${direction === 'buy' ? 'PSNG' : 'SOL'}`);
-    console.log(`  -> Saldo Bot: ${state.botSolBalance.toFixed(2)} SOL, ${state.botPsngBalance.toFixed(2)} PSNG`);
-    console.log(`  -> Pool: ${state.poolSol.toFixed(2)} SOL, ${state.poolPsng.toFixed(2)} PSNG`);
+      console.log(`  -> Berhasil: Dapat ${response.data.amountOut.toFixed(4)} ${direction === 'buy' ? 'PSNG' : 'SOL'}`);
+      console.log(`  -> Saldo Bot: ${state.botSolBalance.toFixed(2)} SOL, ${state.botPsngBalance.toFixed(2)} PSNG`);
+      console.log(`  -> Pool (Estimasi): ${state.poolSol.toFixed(2)} SOL, ${state.poolPsng.toFixed(2)} PSNG`);
+    } else {
+       throw new Error(response.data.error || 'Unknown swap error');
+    }
 
   } catch (error) {
     const errorMessage = error.response ? error.response.data.error : error.message;
