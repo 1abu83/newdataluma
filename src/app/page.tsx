@@ -125,7 +125,7 @@ export default function Home() {
           .map(sDoc => {
             const s = sDoc.data();
             // Firestore timestamps need to be converted to JS Date objects
-            const date = s.timestamp instanceof Timestamp ? s.timestamp.toDate() : new Date(s.timestamp);
+            const date = s.timestamp instanceof Timestamp ? s.timestamp.toDate() : new Date(s.timestamp || Date.now());
             
             const price = s.exchangeRate 
                         ? parseFloat(s.exchangeRate) 
