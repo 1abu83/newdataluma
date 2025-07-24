@@ -45,6 +45,7 @@ export default function PriceChart() {
   const smaSeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
 
   const [chartData, setChartData] = useState<CandlestickData[]>([]);
+  const [latestPrice, setLatestPrice] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTimeframe, setActiveTimeframe] = useState('5');
   const [showSMA, setShowSMA] = useState(false);
@@ -53,7 +54,6 @@ export default function PriceChart() {
   const chartHeight = useMemo(() => isMobile ? 300 : 400, [isMobile]);
 
   useEffect(() => {
-    setLoading(true);
     const symbol = "SOLPSNG"; // Hardcode to always fetch data from RTDB
     const chartRefRtdb = dbRef(rtdb, `charts/${symbol}`);
     let unsubscribed = false;
@@ -92,9 +92,13 @@ export default function PriceChart() {
             }
         }
         setChartData(arr); // Keep local state in sync
+        if (arr.length > 0) {
+            setLatestPrice(arr[arr.length - 1].close);
+        }
 
       } else {
         setChartData([]);
+        setLatestPrice(null);
       }
       if (loading) setLoading(false);
     };
@@ -171,11 +175,15 @@ export default function PriceChart() {
         });
     }
     
+    const watermarkText = latestPrice !== null 
+        ? `SOLPSNG | ${latestPrice.toFixed(8)}`
+        : "SOLPSNG";
+
     chartRef.current.applyOptions({
         watermark: {
             color: 'rgba(118, 128, 140, 0.4)',
             visible: true,
-            text: "SOLPSNG",
+            text: watermarkText,
             fontSize: 24,
             horzAlign: 'left',
             vertAlign: 'top',
@@ -211,7 +219,7 @@ export default function PriceChart() {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [loading, chartData, activeTimeframe, showSMA, chartHeight, isMobile]);
+  }, [loading, chartData, activeTimeframe, showSMA, chartHeight, isMobile, latestPrice]);
   
   useEffect(() => {
       return () => {
