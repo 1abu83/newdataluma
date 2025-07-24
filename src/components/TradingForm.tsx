@@ -37,7 +37,7 @@ export default function TradingForm({ type, selectedAsset, solBalance, psngBalan
   const { publicKey } = useWallet();
   const { toast } = useToast();
 
-  async function handleSwap(amount: number, price?: number) {
+  async function handleMarketOrder(amount: number) {
     if (!publicKey) {
       toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
       return;
@@ -50,17 +50,47 @@ export default function TradingForm({ type, selectedAsset, solBalance, psngBalan
           userId: publicKey.toBase58(),
           direction: type, // 'buy' atau 'sell'
           amount: Number(amount),
-          price: price, // Sertakan harga limit jika ada
         })
       });
       const data = await response.json();
       if (response.ok) {
-        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `Transaction submitted successfully.` });
+        toast({ title: `Market ${type === 'buy' ? 'Buy' : 'Sell'} Success`, description: `Transaction submitted successfully.` });
       } else {
-        toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: data.error || "Unknown error" });
+        toast({ title: `Market ${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: data.error || "Unknown error" });
       }
     } catch (e: any) {
-      toast({ title: `${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
+      toast({ title: `Market ${type === 'buy' ? 'Buy' : 'Sell'} Failed`, description: e.message || String(e) });
+    }
+  }
+
+  async function handleLimitOrder(amount: number, price: number) {
+     if (!publicKey) {
+      toast({ title: "Wallet not connected", description: "Please connect your wallet first." });
+      return;
+    }
+    if (!price) {
+        toast({ title: "Price required", description: "Please enter a price for the limit order." });
+        return;
+    }
+    try {
+      const response = await fetch("https://createlimitorder-xtgnsf4tla-uc.a.run.app", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: publicKey.toBase58(),
+          type: type, // 'buy' atau 'sell'
+          amount: Number(amount),
+          price: Number(price), 
+        })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast({ title: `Limit ${type === 'buy' ? 'Buy' : 'Sell'} Order Created`, description: `Order placed successfully.` });
+      } else {
+        toast({ title: `Limit ${type === 'buy' ? 'Buy' : 'Sell'} Order Failed`, description: data.error || "Unknown error" });
+      }
+    } catch (e: any) {
+      toast({ title: `Limit ${type === 'buy' ? 'Buy' : 'Sell'} Order Failed`, description: e.message || String(e) });
     }
   }
 
@@ -81,13 +111,19 @@ export default function TradingForm({ type, selectedAsset, solBalance, psngBalan
             <LimitOrderForm
               type={type}
               selectedAsset={selectedAsset}
-              onSwap={handleSwap}
+              onSwap={handleLimitOrder}
               solBalance={solBalance}
               psngBalance={psngBalance}
             />
           </TabsContent>
           <TabsContent value="market" className="pt-4">
-            <MarketOrderForm type={type} selectedAsset={selectedAsset} onSwap={handleSwap} solBalance={solBalance} psngBalance={psngBalance} />
+            <MarketOrderForm 
+              type={type} 
+              selectedAsset={selectedAsset} 
+              onSwap={handleMarketOrder} 
+              solBalance={solBalance} 
+              psngBalance={psngBalance} 
+            />
           </TabsContent>
           <TabsContent value="stop-limit" className="pt-4">
             <StopLimitOrderForm type={type} selectedAsset={selectedAsset} />
@@ -100,5 +136,3 @@ export default function TradingForm({ type, selectedAsset, solBalance, psngBalan
     </Card>
   )
 }
-
-    

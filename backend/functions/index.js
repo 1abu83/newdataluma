@@ -70,7 +70,7 @@ exports.swap = functions.https.onRequest(async (req, res) => {
             return res.status(405).json({ error: 'Method not allowed' });
         }
         
-        const { userId, direction, amount, price: limitPrice } = req.body;
+        const { userId, direction, amount } = req.body;
         
         if (!userId || !direction || typeof amount !== 'number' || amount <= 0) {
             return res.status(400).json({ error: 'userId, direction, and a positive amount are required' });
@@ -99,6 +99,8 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                 let { reserveSOL, reservePSNG } = poolDoc.data();
                 reserveSOL = Number(reserveSOL);
                 reservePSNG = Number(reservePSNG);
+                const currentPrice = reserveSOL / reservePSNG;
+
 
                 const FEE = 0.02;
                 let amountIn, amountOut, tokenIn, tokenOut;
@@ -106,6 +108,7 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                 const previousPrice = reserveSOL / reservePSNG;
 
                 if (direction === 'buy') {
+                    // Market Buy: user provides SOL amount
                     amountIn = amount;
                     tokenIn = 'SOL';
                     tokenOut = 'PSNG';
@@ -120,16 +123,12 @@ exports.swap = functions.https.onRequest(async (req, res) => {
 
                     if (amountOut <= 0 || newReservePSNG <= 0) throw new Error('Invalid swap calculation or insufficient liquidity');
                     
-                    const effectivePrice = amountIn / amountOut;
-                    if (limitPrice && effectivePrice > limitPrice) {
-                        throw new Error(`Price is higher than your limit price of ${limitPrice}`);
-                    }
-
                     transaction.set(userSolRef, { amount: userSol - amountIn }, { merge: true });
                     transaction.set(userPsngRef, { amount: userPsng + amountOut }, { merge: true });
                     transaction.set(poolRef, { reserveSOL: newReserveSOL, reservePSNG: newReservePSNG }, { merge: true });
 
                 } else if (direction === 'sell') {
+                     // Market Sell: user provides PSNG amount
                     amountIn = amount;
                     tokenIn = 'PSNG';
                     tokenOut = 'SOL';
@@ -143,11 +142,6 @@ exports.swap = functions.https.onRequest(async (req, res) => {
                     const amountOutAfterFee = amountOut * (1 - FEE);
                     
                     if (amountOutAfterFee <= 0 || newReserveSOL <= 0) throw new Error('Invalid swap calculation or insufficient liquidity');
-
-                    const effectivePrice = amountOut / amountIn;
-                     if (limitPrice && effectivePrice < limitPrice) {
-                        throw new Error(`Price is lower than your limit price of ${limitPrice}`);
-                    }
                     
                     transaction.set(userPsngRef, { amount: userPsng - amountIn }, { merge: true });
                     transaction.set(userSolRef, { amount: userSol + amountOutAfterFee }, { merge: true });
@@ -196,6 +190,49 @@ exports.swap = functions.https.onRequest(async (req, res) => {
         } catch (error) {
             console.error('Swap failed:', error);
             return res.status(400).json({ error: error.message || 'Swap failed' });
+        }
+    });
+});
+
+exports.createLimitOrder = functions.https.onRequest(async (req, res) => {
+    if (req.method === 'OPTIONS') {
+        return handleOptions(req, res);
+    }
+    cors(req, res, async () => {
+        if (req.method !== 'POST') {
+            return res.status(405).json({ error: 'Method not allowed' });
+        }
+        
+        const { userId, type, amount, price } = req.body;
+
+        if (!userId || !type || typeof amount !== 'number' || amount <= 0 || typeof price !== 'number' || price <= 0) {
+            return res.status(400).json({ error: 'userId, type, a positive amount, and a positive price are required' });
+        }
+
+        try {
+            const userSolRef = db.collection('users').doc(userId).collection('balances').doc('SOL');
+            const userPsngRef = db.collection('users').doc(userId).collection('balances').doc('PSNG');
+
+            // For a real implementation, you'd lock the user's funds here in a transaction.
+            // For this demo, we assume the user has enough balance and just place the order.
+            
+            const orderData = {
+                userId,
+                type, // 'buy' or 'sell'
+                amount, // PSNG amount
+                price, // SOL per PSNG
+                total: amount * price, // Total SOL value
+                status: 'open',
+                createdAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            await db.collection('orders').add(orderData);
+            
+            return res.status(200).json({ success: true, message: 'Limit order created successfully.' });
+
+        } catch (error) {
+            console.error('Create limit order failed:', error);
+            return res.status(500).json({ error: error.message || 'Failed to create limit order' });
         }
     });
 });
