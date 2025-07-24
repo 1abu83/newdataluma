@@ -31,20 +31,26 @@ let state = {
 
 function getRandomAmount(baseValue, percentage) {
   const tradeSize = baseValue * percentage;
+  // Menghasilkan jumlah acak antara 50% dan 150% dari ukuran trade dasar
   const amount = Math.random() * tradeSize + (tradeSize * 0.5);
   return parseFloat(amount.toFixed(4));
 }
 
+// Logika cerdas baru untuk menentukan arah jual/beli
 function getSmartDirection() {
   const solValue = state.botSolBalance;
+  // Hitung nilai ekuivalen PSNG dalam SOL
   const psngValue = state.botPsngBalance * (state.poolSol / state.poolPsng);
   
+  // Jika nilai PSNG 20% lebih besar dari nilai SOL, lebih cenderung untuk menjual PSNG
   if (psngValue > solValue * 1.2) {
-    return Math.random() < 0.7 ? 'sell' : 'buy';
+    return Math.random() < 0.7 ? 'sell' : 'buy'; // 70% kemungkinan sell
   }
+  // Jika nilai SOL 20% lebih besar dari nilai PSNG, lebih cenderung untuk membeli PSNG
   if (solValue > psngValue * 1.2) {
-    return Math.random() < 0.7 ? 'buy' : 'sell';
+    return Math.random() < 0.7 ? 'buy' : 'sell'; // 70% kemungkinan buy
   }
+  // Jika nilainya seimbang, 50/50
   return Math.random() < 0.5 ? 'buy' : 'sell';
 }
 
@@ -70,9 +76,10 @@ async function performSwap() {
             return;
         }
       }
-    } else {
+    } else { // direction === 'sell'
+      // Tentukan jumlah PSNG untuk dijual yang setara dengan persentase tertentu dari pool SOL
       const solEquivalentAmount = getRandomAmount(state.poolSol, config.tradeSizePercentage);
-      amount = solEquivalentAmount / (state.poolSol / state.poolPsng);
+      amount = solEquivalentAmount / (state.poolSol / state.poolPsng); // konversi ke jumlah PSNG
 
       if (state.botPsngBalance < amount) {
         console.warn(`Saldo PSNG bot tidak cukup (${state.botPsngBalance.toFixed(2)}), mencoba trade yang lebih kecil.`);
@@ -101,7 +108,7 @@ async function performSwap() {
         state.botPsngBalance += amountOut;
         state.poolSol += amountIn;
         state.poolPsng -= amountOut;
-      } else {
+      } else { // 'sell'
         state.botPsngBalance -= amountIn;
         state.botSolBalance += amountOut;
         state.poolPsng += amountIn;
@@ -130,24 +137,12 @@ async function initializeBot() {
     });
     console.log(`User ${config.userId} siap digunakan.`);
 
-    // Mengatur saldo awal bot secara lokal, dan memanggil fungsi untuk menambahkan di backend.
+    // Mengatur saldo awal bot secara lokal
     state.botSolBalance = config.initialBotBalance.sol;
     state.botPsngBalance = config.initialBotBalance.psng;
     
-    // Panggil fungsi untuk menambahkan saldo di backend (opsional, tapi bagus untuk konsistensi)
-    // Anda perlu membuat fungsi 'addBalance' di Firebase Functions
-    /*
-    await axios.post(`${config.functionsBaseUrl}/addBalance`, {
-      userId: config.userId,
-      token: 'SOL',
-      amount: config.initialBotBalance.sol
-    });
-    await axios.post(`${config.functionsBase_url}/addBalance`, {
-      userId: config.userId,
-      token: 'PSNG',
-      amount: config.initialBotBalance.psng
-    });
-    */
+    // Ini hanya simulasi lokal, saldo di backend akan diupdate melalui swap.
+    // Jika Anda ingin menyinkronkan saldo awal ke backend, Anda perlu fungsi 'setBalance'.
     console.log(`Saldo awal bot diatur ke: ${state.botSolBalance} SOL, ${state.botPsngBalance} PSNG`);
     
     return true;
