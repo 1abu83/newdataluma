@@ -1,0 +1,43 @@
+
+.progress-bar-container {
+    position: relative;
+}
+
+.progress-bar-soft-cap {
+    position: absolute;
+    top: -2px; 
+    bottom: -2px;
+    width: 2px;
+    background-color: hsl(var(--accent));
+    transform: translateX(-50%);
+    z-index: 10;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.progress-bar-soft-cap:hover {
+    background-color: hsl(var(--primary));
+}
+
+.progress-bar-soft-cap::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 120%;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: hsl(var(--popover));
+    color: hsl(var(--popover-foreground));
+    padding: 4px 8px;
+    border-radius: var(--radius);
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease-in-out, visibility 0.2s ease-in-out;
+    z-index: 20;
+}
+
+.progress-bar-soft-cap:hover::after {
+    opacity: 1;
+    visibility: visible;
+}

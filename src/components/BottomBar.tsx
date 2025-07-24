@@ -3,12 +3,13 @@
 
 import { LayoutGrid, CandlestickChart, Repeat, Rocket } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import Link from 'next/link';
 
 const navItems = [
-  { href: '#', icon: LayoutGrid, label: 'Dashboard' },
-  { href: '#', icon: CandlestickChart, label: 'Markets', active: true },
-  { href: '#', icon: Repeat, label: 'Trade' },
-  { href: '#', label: 'Launchpad', icon: Rocket },
+  { href: '/', icon: LayoutGrid, label: 'Dashboard' },
+  { href: '/', icon: CandlestickChart, label: 'Markets', active: true },
+  { href: '/', icon: Repeat, label: 'Trade' },
+  { href: '/launchpad', label: 'Launchpad', icon: Rocket },
 ];
 
 export default function BottomBar() {
@@ -16,9 +17,9 @@ export default function BottomBar() {
     <div className="fixed bottom-0 left-0 z-50 w-full h-16 bg-background border-t border-border/40 md:hidden">
       <div className="grid h-full max-w-lg grid-cols-4 mx-auto font-medium">
         {navItems.map((item) => (
-          <button
+          <Link
             key={item.label}
-            type="button"
+            href={item.href}
             className={cn(
               "inline-flex flex-col items-center justify-center px-5 hover:bg-muted/50 group",
               item.active ? "text-primary" : "text-muted-foreground"
@@ -28,7 +29,7 @@ export default function BottomBar() {
             <span className="text-xs">
               {item.label}
             </span>
-          </button>
+          </Link>
         ))}
       </div>
     </div>

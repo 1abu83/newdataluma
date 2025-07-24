@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import CustomWalletButton from './CustomWalletButton';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useIsMobile } from '@/hooks/use-mobile';
+import Link from 'next/link';
 
 interface HeaderProps {
   isMarketBarOpen: boolean;
@@ -40,20 +41,20 @@ export default function Header({ isMarketBarOpen, onMarketToggle, onDepositClick
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 max-w-screen-2xl items-center justify-between px-2 md:px-6 lg:px-8">
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
+          <Link href="/" className="flex items-center gap-3">
             <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
               <Image src="/lu.png" alt="Luma logo" width={24} height={24} data-ai-hint="logo" />
             </div>
             <h1 className="text-xl md:text-2xl font-bold text-foreground">LUMADEX</h1>
-          </div>
+          </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <a href="#" className="transition-colors hover:text-foreground">Dashboard</a>
+            <Link href="/" className="transition-colors hover:text-foreground">Dashboard</Link>
              <button onClick={onMarketToggle} className="flex items-center gap-1 transition-colors hover:text-foreground">
               <span>Markets</span>
               <ChevronDown className={cn("h-4 w-4 transition-transform", isMarketBarOpen && "rotate-180")} />
             </button>
-            <a href="#" className="transition-colors hover:text-foreground">Trade</a>
-            <a href="#" className="transition-colors hover:text-foreground">Launchpad</a>
+            <Link href="/" className="transition-colors hover:text-foreground">Trade</Link>
+            <Link href="/launchpad" className="transition-colors hover:text-foreground">Launchpad</Link>
           </nav>
           <div className="md:hidden">
             {/* Menu dropdown dihapus untuk tampilan mobile */}
