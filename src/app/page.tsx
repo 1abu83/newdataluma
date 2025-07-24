@@ -17,7 +17,9 @@ import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import DrawingToolbar from '@/components/DrawingToolbar';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { app } from '@/lib/firebase'; // Import app to ensure initialization
+import { app, rtdb } from '@/lib/firebase'; // Import app and rtdb
+import { ref as dbRef, onValue, off } from "firebase/database";
+
 
 export interface Asset {
   id: string;
@@ -78,16 +80,21 @@ export default function Home() {
     // Don't set loading to false here, wait for price data
   }, []);
 
-  // Real-time listener for the liquidity pool to get the price
+  // Real-time listener for the price from Realtime Database
   useEffect(() => {
-    const db = getFirestore();
-    const poolRef = doc(db, 'pools', 'PSNG_SOL');
+    const chartRefRtdb = dbRef(rtdb, `charts/SOLPSNG`);
+    let unsubscribed = false;
 
-    const unsubscribe = onSnapshot(poolRef, (doc) => {
-      if (doc.exists()) {
-        const { reserveSOL, reservePSNG } = doc.data();
-        if (reservePSNG > 0) {
-          const newPrice = reserveSOL / reservePSNG;
+    const handleValue = (snapshot: any) => {
+      if (unsubscribed) return;
+      const val = snapshot.val();
+      if (val) {
+        // Find the most recent candle to get the latest close price
+        const latestTimestamp = Math.max(...Object.keys(val).map(Number));
+        const latestCandle = val[latestTimestamp];
+        
+        if (latestCandle && latestCandle.close) {
+          const newPrice = latestCandle.close;
           
           setSelectedAsset(prevAsset => {
             if (prevAsset) {
@@ -103,13 +110,18 @@ export default function Home() {
           });
         }
       }
-      setLoading(false); // Price data is loaded or pool doesn't exist
-    }, (error) => {
-        console.error("Error fetching pool data:", error);
+      setLoading(false); // Price data is loaded or doesn't exist
+    };
+    
+    onValue(chartRefRtdb, handleValue, (error) => {
+        console.error("Error fetching price data from RTDB:", error);
         setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+        unsubscribed = true;
+        off(chartRefRtdb, 'value', handleValue);
+    };
   }, []);
 
 
