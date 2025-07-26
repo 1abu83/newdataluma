@@ -6,10 +6,11 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutGrid, label: 'Dashboard', active: true },
-  { href: '/dashboard', icon: CandlestickChart, label: 'Markets' },
-  { href: '/dashboard', icon: Repeat, label: 'Trade' },
+  { href: '/dashboard', icon: LayoutGrid, label: 'Dashboard' },
+  { href: '/trade', icon: CandlestickChart, label: 'Trade', active: true },
   { href: '/launchpad', label: 'Launchpad', icon: Rocket },
+  // Adding a fourth item for layout consistency, can be anything.
+  { href: '#', icon: Repeat, label: 'Swap' }, 
 ];
 
 export default function BottomBar() {

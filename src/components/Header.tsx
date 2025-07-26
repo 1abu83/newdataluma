@@ -53,7 +53,7 @@ export default function Header({ isMarketBarOpen, onMarketToggle, onDepositClick
               <span>Markets</span>
               <ChevronDown className={cn("h-4 w-4 transition-transform", isMarketBarOpen && "rotate-180")} />
             </button>
-            <Link href="/dashboard" className="transition-colors hover:text-foreground">Trade</Link>
+            <Link href="/trade" className="transition-colors hover:text-foreground">Trade</Link>
             <Link href="/launchpad" className="transition-colors hover:text-foreground">Launchpad</Link>
           </nav>
           <div className="md:hidden">

@@ -3,247 +3,237 @@
 
 import { useState, useEffect } from 'react';
 import Header from '@/components/Header';
-import PriceChart from '@/components/PriceChart';
-import TradingForm from '@/components/TradingForm';
-import OrderBook from '@/components/OrderBook';
-import OrderHistory from '@/components/OrderHistory';
-import MarketBar from '@/components/MarketBar';
-import AssetInfoBar from '@/components/AssetInfoBar';
 import BottomBar from '@/components/BottomBar';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useWallet } from '@solana/wallet-adapter-react';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
 import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
-import DrawingToolbar from '@/components/DrawingToolbar';
+import { useWallet } from '@solana/wallet-adapter-react';
 import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit, Timestamp } from 'firebase/firestore';
-import { app, rtdb } from '@/lib/firebase'; // Import app and rtdb
-import { ref as dbRef, onValue, off } from "firebase/database";
+import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
+import { app } from '@/lib/firebase';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { ArrowUpRight, Copy, ExternalLink, MoreVertical } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
-
-export interface Asset {
+interface Asset {
   id: string;
   name: string;
-  icon: {
-    src: string;
-    alt: string;
-  };
+  icon: string;
+  amount: number;
+  value: number;
   price: number;
   change: number;
-  volume: number;
-  marketCap: number;
-  holders: number;
 }
 
-
 export default function DashboardPage() {
-  const [isMarketBarOpen, setMarketBarOpen] = useState(true);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isMarketBarOpen, setMarketBarOpen] = useState(false);
   const [isWalletSetupOpen, setWalletSetupOpen] = useState(false);
   const [isWalletWithdrawOpen, setWalletWithdrawOpen] = useState(false);
-  const [tradeHistory, setTradeHistory] = useState<any[]>([]);
   const [user, setUser] = useState<User | null>(null);
-  const { publicKey } = useWallet();
+  const { publicKey, connected } = useWallet();
+  const { toast } = useToast();
 
-  // Centralized balance state
-  const [solBalance, setSolBalance] = useState<number | undefined>(undefined);
-  const [psngBalance, setPsngBalance] = useState<number | undefined>(undefined);
+  const [solBalance, setSolBalance] = useState<number>(0);
+  const [psngBalance, setPsngBalance] = useState<number>(0);
+  const [psngPrice, setPsngPrice] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
 
-  // Set initial asset data without price, change, or volume
-  useEffect(() => {
-    const initialAssets = [
-      { 
-        id: 'PSNG/SOL', 
-        name: 'Pasino',
-        icon: { src: "/psng.png", alt: "Pasino logo" },
-        price: 0, 
-        change: 0, // Will be updated by the listener
-        volume: 0, // Will be updated by the listener
-        marketCap: 2300000, // Mock data
-        holders: 15000, // Mock data
-      },
-      {
-        id: 'LUMA/SOL', 
-        name: 'Luma',
-        icon: { src: "/lu.png", alt: "Luma logo" },
-        price: 45.78, // Mock data
-        change: 5.8,
-        volume: 2500000,
-        marketCap: 5800000,
-        holders: 42000,
-      },
-    ];
-    setAssets(initialAssets);
-    setSelectedAsset(initialAssets[0]);
-  }, []);
-
-  // Real-time listener for price, volume, and change from Realtime Database
-  useEffect(() => {
-    const chartRefRtdb = dbRef(rtdb, `charts/SOLPSNG`);
-    let unsubscribed = false;
-
-    const handleValue = (snapshot: any) => {
-      if (unsubscribed) return;
-      const val = snapshot.val();
-      if (val) {
-        // Sort candles by timestamp to ensure correct order
-        const allCandles = Object.entries(val)
-            .map(([timestamp, d]: [string, any]) => ({...d, timestamp: Number(timestamp)}))
-            .sort((a, b) => a.timestamp - b.timestamp);
-
-        if (allCandles.length > 0) {
-            const latestCandle = allCandles[allCandles.length - 1];
-            const newPrice = latestCandle.close;
-
-            // --- Calculate 24h Volume ---
-            const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-            const recentCandles = allCandles.filter(c => c.timestamp >= oneDayAgo);
-            const volume24h = recentCandles.reduce((sum, candle) => sum + (candle.volume || 0), 0);
-
-            // --- Calculate 24h Change ---
-            let change24h = 0;
-            const candle24hAgo = allCandles.find(c => c.timestamp >= oneDayAgo);
-
-            if (candle24hAgo && candle24hAgo.open > 0) {
-                const price24hAgo = candle24hAgo.open;
-                change24h = ((newPrice - price24hAgo) / price24hAgo) * 100;
-            } else if (allCandles.length > 1) {
-                const firstCandle = allCandles[0];
-                change24h = ((newPrice - firstCandle.open) / firstCandle.open) * 100;
-            }
-
-            const updateAsset = (prev: Asset | null) => {
-                if (prev) {
-                    return { ...prev, price: newPrice, volume: volume24h, change: change24h };
-                }
-                return null;
-            }
-
-            setSelectedAsset(updateAsset);
-
-            setAssets(prevAssets => {
-                return prevAssets.map(asset => 
-                    asset.id === 'PSNG/SOL' ? { ...asset, price: newPrice, volume: volume24h, change: change24h } : asset
-                );
-            });
-        }
-      }
-      setLoading(false); 
-    };
-    
-    onValue(chartRefRtdb, handleValue, (error) => {
-        console.error("Error fetching data from RTDB:", error);
-        setLoading(false);
-    });
-
-    return () => {
-        unsubscribed = true;
-        off(chartRefRtdb, 'value', handleValue);
-    };
-  }, []);
-
-
+  // Listen for authentication state
   useEffect(() => {
     const auth = getAuth(app);
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        setWalletSetupOpen(false); // Close dialog on successful login
-      }
     });
     return () => unsubscribe();
   }, []);
 
-  // Real-time balance listener
+  // Listen for asset price (PSNG)
+    useEffect(() => {
+        const db = getFirestore(app);
+        const poolRef = doc(db, "pools", "PSNG_SOL");
+        const unsubscribe = onSnapshot(poolRef, (doc) => {
+            if (doc.exists()) {
+                const data = doc.data();
+                setPsngPrice(data.reserveSOL / data.reservePSNG);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+  // Listen for user balances
   useEffect(() => {
-    if (publicKey) {
-      const db = getFirestore(app);
-      
-      const solBalanceUnsub = onSnapshot(
-        doc(db, "users", publicKey.toBase58(), "balances", "SOL"),
-        (doc) => setSolBalance(doc.exists() ? doc.data().amount : 0)
-      );
-
-      const psngBalanceUnsub = onSnapshot(
-        doc(db, "users", publicKey.toBase58(), "balances", "PSNG"),
-        (doc) => setPsngBalance(doc.exists() ? doc.data().amount : 0)
-      );
-
-      return () => {
-        solBalanceUnsub();
-        psngBalanceUnsub();
-      };
-    } else {
-      setSolBalance(undefined);
-      setPsngBalance(undefined);
+    if (!publicKey) {
+      setLoading(false);
+      return;
     }
+    const db = getFirestore(app);
+    
+    const solUnsub = onSnapshot(doc(db, "users", publicKey.toBase58(), "balances", "SOL"), (doc) => {
+      setSolBalance(doc.exists() ? doc.data().amount : 0);
+      setLoading(false);
+    });
+
+    const psngUnsub = onSnapshot(doc(db, "users", publicKey.toBase58(), "balances", "PSNG"), (doc) => {
+      setPsngBalance(doc.exists() ? doc.data().amount : 0);
+      setLoading(false);
+    });
+
+    return () => {
+      solUnsub();
+      psngUnsub();
+    };
   }, [publicKey]);
 
-  // Fetch swap/trade data from Firestore using a real-time listener
-  useEffect(() => {
-    const db = getFirestore(app);
-    const swapsQuery = query(collection(db, "swaps"), orderBy("timestamp", "desc"), limit(50));
-    
-    const unsubscribe = onSnapshot(swapsQuery, (snapshot) => {
-        const history = snapshot.docs
-          .filter(doc => !doc.metadata.hasPendingWrites && doc.data().timestamp)
-          .map(sDoc => {
-            const s = sDoc.data();
-            // Firestore timestamps need to be converted to JS Date objects
-            const date = s.timestamp instanceof Timestamp ? s.timestamp.toDate() : new Date(s.timestamp || Date.now());
-            
-            const price = s.exchangeRate 
-                        ? parseFloat(s.exchangeRate) 
-                        : (s.direction === 'buy' ? (s.amountIn / s.amountOut) : (s.amountOut / s.amountIn));
-            const amount = s.direction === 'buy' ? s.amountOut : s.amountIn;
-  
-            return {
-              date: date.toISOString(),
-              pair: 'PSNG/SOL',
-              type: s.direction === 'buy' ? 'Buy' : 'Sell',
-              price: isNaN(price) ? 0 : price,
-              amount: amount,
-              total: s.amountIn,
-            };
-        });
-        
-        setTradeHistory(history);
+  const portfolioValue = solBalance + (psngBalance * psngPrice);
+
+  const assets: Asset[] = [
+    { id: 'SOL', name: 'Solana', icon: '/sol.png', amount: solBalance, value: solBalance, price: 1, change: 0 },
+    { id: 'PSNG', name: 'Pasino', icon: '/psng.png', amount: psngBalance, value: psngBalance * psngPrice, price: psngPrice, change: 0 },
+  ];
+   const lumadexTokens = [
+    { id: 'PSNG', name: 'Pasino', icon: '/psng.png', price: psngPrice, marketCap: 2300000 },
+    { id: 'LUMA', name: 'Luma', icon: '/lu.png', price: 0.0001, marketCap: 100000 },
+    { id: 'BRICS', name: 'Brics', icon: '/br.png', price: 0.00025, marketCap: 500000 },
+    { id: 'BLC', name: 'BlockChain', icon: '/bl.png', price: 0.0005, marketCap: 1250000 },
+  ];
+
+  const handleCopyAddress = () => {
+    if (!publicKey) return;
+    navigator.clipboard.writeText(publicKey.toBase58());
+    toast({
+      title: 'Address Copied!',
+      description: 'Your wallet address has been copied to the clipboard.',
     });
+  };
 
-    return () => unsubscribe();
-  }, []);
+  const renderContent = () => {
+    if (loading) {
+      return <DashboardSkeleton />;
+    }
 
-
-  if (loading || !selectedAsset) {
+    if (!connected || !publicKey) {
+      return (
+        <div className="text-center py-20">
+          <h2 className="text-2xl font-semibold">Connect Your Wallet</h2>
+          <p className="mt-2 text-muted-foreground">Please connect your wallet to view your dashboard and portfolio.</p>
+        </div>
+      );
+    }
+  
     return (
-      <div className="flex flex-col min-h-screen bg-background">
-        <Header 
-          isMarketBarOpen={isMarketBarOpen} 
-          onMarketToggle={() => setMarketBarOpen(!isMarketBarOpen)} 
-          onDepositClick={() => setWalletSetupOpen(true)}
-          onWithdrawClick={() => setWalletWithdrawOpen(true)}
-        />
-        <div className="container mx-auto max-w-screen-2xl p-4">
-           <Skeleton className="h-20 w-full mb-4" />
-           <div className="grid gap-6 grid-cols-1 lg:grid-cols-5">
-              <div className="lg:col-span-3 flex flex-col gap-6">
-                <Skeleton className="h-[400px] w-full" />
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <Skeleton className="h-[300px] w-full" />
-                    <Skeleton className="h-[300px] w-full" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Left Column: Profile & Portfolio */}
+        <div className="lg:col-span-1 space-y-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage src="/profil.png" alt="User Avatar" />
+                  <AvatarFallback>{publicKey.toBase58().slice(0, 2)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle className="text-xl">My Profile</CardTitle>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-sm text-muted-foreground truncate">{publicKey.toBase58()}</p>
+                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyAddress}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-              <div className="lg:col-span-2 flex flex-col gap-6">
-                <Skeleton className="h-[400px] w-full" />
-                <Skeleton className="h-[400px] w-full" />
+            </CardHeader>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>My Portfolio</CardTitle>
+              <CardDescription>A summary of your assets held on LUMADEX.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-4xl font-bold">
+                ${portfolioValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
-           </div>
+              <p className="text-sm text-muted-foreground mt-1">Total value in USD</p>
+              
+              <div className="space-y-4 mt-6">
+                {assets.filter(a => a.amount > 0).map(asset => (
+                  <div key={asset.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Image src={asset.icon} alt={`${asset.name} logo`} width={32} height={32} />
+                      <div>
+                        <div className="font-semibold">{asset.name}</div>
+                        <div className="text-sm text-muted-foreground">{asset.amount.toLocaleString()} {asset.id}</div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                       <div className="font-semibold">${asset.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                       <div className="text-sm text-muted-foreground">@{asset.price.toFixed(8)}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: LUMADEX Tokens */}
+        <div className="lg:col-span-2">
+           <Card>
+            <CardHeader>
+              <CardTitle>LUMADEX Tokens</CardTitle>
+              <CardDescription>All tokens available for trading on the platform.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Token</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead className="hidden md:table-cell">Market Cap</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lumadexTokens.map((token) => (
+                    <TableRow key={token.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Image src={token.icon} alt={`${token.name} logo`} width={32} height={32} />
+                          <div>
+                            <div className="font-semibold">{token.name}</div>
+                            <div className="text-sm text-muted-foreground">{token.id}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="font-medium">${token.price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 8 })}</div>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        ${token.marketCap.toLocaleString()}
+                      </TableCell>
+                       <TableCell className="text-right">
+                        <Link href="/trade">
+                            <Button variant="outline" size="sm">
+                                Trade
+                                <ArrowUpRight className="h-4 w-4 ml-2" />
+                            </Button>
+                        </Link>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
         </div>
       </div>
     );
-  }
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -261,36 +251,55 @@ export default function DashboardPage() {
         onDepositClick={() => setWalletSetupOpen(true)}
         onWithdrawClick={() => setWalletWithdrawOpen(true)}
       />
-      <div className="flex-1 pb-20 md:pb-0">
-        <MarketBar isOpen={isMarketBarOpen} assets={assets} />
-        <AssetInfoBar 
-          assets={assets}
-          selectedAsset={selectedAsset}
-          onAssetChange={setSelectedAsset}
-          onMarketToggle={() => setMarketBarOpen(!isMarketBarOpen)}
-        />
-        <main className="container mx-auto max-w-screen-2xl px-0 md:px-6 lg:px-8">
-          <div className="mt-6 flex items-stretch">
-            <div className="hidden md:flex items-center pr-2">
-              <DrawingToolbar />
-            </div>
-            <div className="flex-1">
-              <PriceChart />
-            </div>
-          </div>
-          <div className="grid gap-6 grid-cols-1 lg:grid-cols-5 mt-6 px-4 md:px-0">
-            <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <TradingForm type="buy" selectedAsset={selectedAsset} solBalance={solBalance} psngBalance={psngBalance} />
-              <TradingForm type="sell" selectedAsset={selectedAsset} solBalance={solBalance} psngBalance={psngBalance} />
-            </div>
-            <div className="lg:col-span-2 flex flex-col gap-6">
-              <OrderBook selectedAsset={selectedAsset} />
-              <OrderHistory selectedAsset={selectedAsset} tradeHistory={tradeHistory} />
-            </div>
-          </div>
-        </main>
-      </div>
+      <main className="flex-1 container mx-auto max-w-screen-xl px-4 py-8">
+        {renderContent()}
+      </main>
       <BottomBar />
     </div>
   );
+}
+
+
+function DashboardSkeleton() {
+    return (
+         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-1 space-y-8">
+                <Card>
+                    <CardHeader>
+                         <div className="flex items-center gap-4">
+                            <Skeleton className="h-16 w-16 rounded-full" />
+                            <div className="space-y-2">
+                                <Skeleton className="h-6 w-32" />
+                                <Skeleton className="h-4 w-48" />
+                            </div>
+                         </div>
+                    </CardHeader>
+                </Card>
+                 <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-40" />
+                        <Skeleton className="h-4 w-60 mt-2" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-12 w-1/2" />
+                        <div className="space-y-4 mt-6">
+                            <Skeleton className="h-12 w-full" />
+                            <Skeleton className="h-12 w-full" />
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+            <div className="lg:col-span-2">
+                <Card>
+                    <CardHeader>
+                        <Skeleton className="h-8 w-48" />
+                        <Skeleton className="h-4 w-72 mt-2" />
+                    </CardHeader>
+                    <CardContent>
+                        <Skeleton className="h-64 w-full" />
+                    </CardContent>
+                </Card>
+            </div>
+         </div>
+    );
 }
