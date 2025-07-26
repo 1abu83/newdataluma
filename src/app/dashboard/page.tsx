@@ -96,10 +96,10 @@ export default function DashboardPage() {
     { id: 'PSNG', name: 'Pasino', icon: '/psng.png', amount: psngBalance, value: psngBalance * psngPrice, price: psngPrice, change: 0 },
   ];
    const lumadexTokens = [
-    { id: 'PSNG', name: 'Pasino', icon: '/psng.png', price: psngPrice, marketCap: 2300000 },
-    { id: 'LUMA', name: 'Luma', icon: '/lu.png', price: 0.0001, marketCap: 100000 },
-    { id: 'BRICS', name: 'Brics', icon: '/br.png', price: 0.00025, marketCap: 500000 },
-    { id: 'BLC', name: 'BlockChain', icon: '/bl.png', price: 0.0005, marketCap: 1250000 },
+    { id: 'PSNG', name: 'Pasino', icon: '/psng.png', price: 0.000828, marketCap: 0 },
+    { id: 'LUMA', name: 'Luma', icon: '/lu.png', price: 0.92, marketCap: 0 },
+    { id: 'BRICS', name: 'Brics', icon: '/br.png', price: 0.000104, marketCap: 0 },
+    { id: 'BLC', name: 'BlockChain', icon: '/bl.png', price: 6.13, marketCap: 0 },
   ];
 
   const handleCopyAddress = () => {
@@ -303,3 +303,5 @@ function DashboardSkeleton() {
          </div>
     );
 }
+
+    
