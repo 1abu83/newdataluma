@@ -139,7 +139,7 @@ export default function DashboardPage() {
                 <div>
                   <CardTitle className="text-xl">My Profile</CardTitle>
                   <div className="flex items-center gap-2 mt-1">
-                    <p className="text-sm text-muted-foreground truncate">{publicKey.toBase58()}</p>
+                    <p className="text-sm text-muted-foreground truncate">{`${publicKey.toBase58().slice(0, 4)}...${publicKey.toBase58().slice(-4)}`}</p>
                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopyAddress}>
                       <Copy className="h-4 w-4" />
                     </Button>
