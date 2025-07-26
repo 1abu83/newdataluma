@@ -234,7 +234,7 @@ export default function PriceChart() {
   if (loading && chartData.length === 0) {
     return (
       <Card className="rounded-none md:rounded-lg">
-        <CardContent className="relative pt-6">
+        <CardContent className="relative p-0">
            <div className="absolute top-2 left-2 z-10 flex gap-1">
              {timeframes.map((tf) => ( <Skeleton key={tf.value} className="h-7 w-10" /> ))}
            </div>
@@ -246,7 +246,7 @@ export default function PriceChart() {
 
   return (
     <Card className="rounded-none md:rounded-lg">
-      <CardContent className="relative p-2 md:p-6">
+      <CardContent className="relative p-0">
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 flex-wrap">
           {timeframes.map((tf) => (
             <Button
