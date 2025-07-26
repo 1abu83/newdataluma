@@ -48,12 +48,12 @@ export default function Header({ isMarketBarOpen, onMarketToggle, onDepositClick
             <h1 className="text-xl md:text-2xl font-bold text-foreground">LUMADEX</h1>
           </Link>
           <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <Link href="/" className="transition-colors hover:text-foreground">Dashboard</Link>
+            <Link href="/dashboard" className="transition-colors hover:text-foreground">Dashboard</Link>
              <button onClick={onMarketToggle} className="flex items-center gap-1 transition-colors hover:text-foreground">
               <span>Markets</span>
               <ChevronDown className={cn("h-4 w-4 transition-transform", isMarketBarOpen && "rotate-180")} />
             </button>
-            <Link href="/" className="transition-colors hover:text-foreground">Trade</Link>
+            <Link href="/dashboard" className="transition-colors hover:text-foreground">Trade</Link>
             <Link href="/launchpad" className="transition-colors hover:text-foreground">Launchpad</Link>
           </nav>
           <div className="md:hidden">

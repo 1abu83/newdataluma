@@ -6,9 +6,9 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
 const navItems = [
-  { href: '/', icon: LayoutGrid, label: 'Dashboard' },
-  { href: '/', icon: CandlestickChart, label: 'Markets', active: true },
-  { href: '/', icon: Repeat, label: 'Trade' },
+  { href: '/dashboard', icon: LayoutGrid, label: 'Dashboard', active: true },
+  { href: '/dashboard', icon: CandlestickChart, label: 'Markets' },
+  { href: '/dashboard', icon: Repeat, label: 'Trade' },
   { href: '/launchpad', label: 'Launchpad', icon: Rocket },
 ];
 
