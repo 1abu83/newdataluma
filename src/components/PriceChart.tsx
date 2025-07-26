@@ -276,12 +276,7 @@ export default function PriceChart() {
               SMA
             </Button>
         </div>
-        <div className="relative">
-             <div className="absolute top-1/2 -translate-y-1/2 left-2 z-10 hidden md:block">
-                <DrawingToolbar />
-            </div>
-            <div ref={chartContainerRef} style={{ height: `${chartHeight}px`, width: '100%' }} />
-        </div>
+        <div ref={chartContainerRef} style={{ height: `${chartHeight}px`, width: '100%' }} />
       </CardContent>
     </Card>
   );

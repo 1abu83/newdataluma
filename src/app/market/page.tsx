@@ -16,6 +16,7 @@ import WalletWithdrawDialog from '@/components/WalletWithdrawDialog';
 import { getFirestore, doc, onSnapshot, collection, query, orderBy, limit } from 'firebase/firestore';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { app } from '@/lib/firebase';
+import DrawingToolbar from '@/components/DrawingToolbar';
 
 // Mock data structure, will be replaced with real data
 type Asset = {
@@ -162,7 +163,14 @@ export default function MarketPage() {
         <div className="flex-1 flex flex-col md:flex-row p-2 md:p-4 gap-2 md:gap-4 overflow-hidden">
             
             <div className="flex-1 flex flex-col gap-2 md:gap-4 overflow-hidden">
-                <PriceChart />
+                <div className="flex gap-2">
+                    <div className="hidden md:flex items-center">
+                        <DrawingToolbar />
+                    </div>
+                    <div className="flex-1">
+                        <PriceChart />
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-4 h-full min-h-0">
                     <TradingForm 
                       type="buy" 
