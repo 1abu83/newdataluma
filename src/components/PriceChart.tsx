@@ -11,6 +11,7 @@ import { LineChart } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { rtdb } from "@/lib/firebase";
 import { ref as dbRef, onValue, off } from "firebase/database";
+import DrawingToolbar from './DrawingToolbar';
 
 const timeframes = [
     { label: '1m', value: '1' },
@@ -245,7 +246,7 @@ export default function PriceChart() {
 
   return (
     <Card className="rounded-none md:rounded-lg">
-      <CardContent className="relative pt-6 px-2 md:px-6">
+      <CardContent className="relative p-2 md:p-6">
         <div className="absolute top-2 left-2 z-10 flex items-center gap-1 flex-wrap">
           {timeframes.map((tf) => (
             <Button
@@ -275,7 +276,12 @@ export default function PriceChart() {
               SMA
             </Button>
         </div>
-        <div ref={chartContainerRef} style={{ height: `${chartHeight}px`, width: '100%' }} />
+        <div className="relative">
+             <div className="absolute top-1/2 -translate-y-1/2 left-2 z-10 hidden md:block">
+                <DrawingToolbar />
+            </div>
+            <div ref={chartContainerRef} style={{ height: `${chartHeight}px`, width: '100%' }} />
+        </div>
       </CardContent>
     </Card>
   );

@@ -9,7 +9,6 @@ import PriceChart from '@/components/PriceChart';
 import TradingForm from '@/components/TradingForm';
 import OrderBook from '@/components/OrderBook';
 import OrderHistory from '@/components/OrderHistory';
-import DrawingToolbar from '@/components/DrawingToolbar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import WalletSetupDialog from '@/components/WalletSetupDialog';
@@ -162,26 +161,21 @@ export default function MarketPage() {
       <main className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col md:flex-row p-2 md:p-4 gap-2 md:gap-4 overflow-hidden">
             
-            <div className="flex-1 flex flex-row gap-2 md:gap-4 overflow-hidden">
-                 <div className="hidden md:flex items-center justify-center">
-                    <DrawingToolbar />
-                </div>
-                <div className="flex-1 flex flex-col gap-2 md:gap-4 overflow-hidden">
-                    <PriceChart />
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-4 h-full min-h-0">
-                        <TradingForm 
-                          type="buy" 
-                          selectedAsset={selectedAsset} 
-                          solBalance={solBalance} 
-                          psngBalance={psngBalance}
-                        />
-                        <TradingForm 
-                          type="sell" 
-                          selectedAsset={selectedAsset} 
-                          solBalance={solBalance} 
-                          psngBalance={psngBalance} 
-                        />
-                    </div>
+            <div className="flex-1 flex flex-col gap-2 md:gap-4 overflow-hidden">
+                <PriceChart />
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-4 h-full min-h-0">
+                    <TradingForm 
+                      type="buy" 
+                      selectedAsset={selectedAsset} 
+                      solBalance={solBalance} 
+                      psngBalance={psngBalance}
+                    />
+                    <TradingForm 
+                      type="sell" 
+                      selectedAsset={selectedAsset} 
+                      solBalance={solBalance} 
+                      psngBalance={psngBalance} 
+                    />
                 </div>
             </div>
 
@@ -210,5 +204,3 @@ export default function MarketPage() {
     </div>
   );
 }
-
-
