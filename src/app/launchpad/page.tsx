@@ -36,11 +36,19 @@ export default function LaunchpadPage() {
         onWithdrawClick={() => setWalletWithdrawOpen(true)}
       />
       <main className="flex-1 container mx-auto max-w-screen-xl px-4 py-8">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8">
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">Token Launchpad</h1>
           <p className="mt-4 text-lg text-muted-foreground">
             Be the first to support and invest in the next generation of decentralized projects.
           </p>
+        </div>
+        
+        <div className="flex justify-center mb-12">
+          <Link href="/launchpad/create">
+            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              Create Your Presale
+            </Button>
+          </Link>
         </div>
 
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">

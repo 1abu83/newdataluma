@@ -29,7 +29,7 @@ export const presaleProjects = [
   {
     name: 'BRICS',
     slug: 'brics',
-    icon: '/brics.png',
+    icon: '/br.png',
     tagline: 'Decentralized token for emerging market economies.',
     shortDescription: 'A decentralized token for emerging market economies, fostering cross-border trade.',
     longDescription: 'BRICS is an ambitious project aiming to create a decentralized financial instrument tailored for emerging markets. The token facilitates low-cost, near-instant cross-border transactions, bypassing traditional financial intermediaries. It is built on a robust, scalable blockchain designed to handle high transaction volumes. The BRICS ecosystem will include a dedicated marketplace and a suite of financial tools to empower small and medium-sized enterprises (SMEs) in developing nations, fostering economic growth and financial inclusion.',
@@ -55,7 +55,7 @@ export const presaleProjects = [
   {
     name: 'BLC',
     slug: 'blc',
-    icon: '/blc.png',
+    icon: '/bl.png',
     tagline: 'A foundational layer-1 token for scalability and security.',
     shortDescription: 'BlockChain Coin is a foundational layer-1 token designed for scalability and security.',
     longDescription: 'BlockChain Coin (BLC) is a next-generation layer-1 blockchain designed from the ground up to solve the "blockchain trilemma" of achieving scalability, security, and decentralization simultaneously. With a novel consensus mechanism and a developer-friendly smart contract environment, BLC aims to be the foundational layer for a new wave of decentralized applications (dApps), from complex DeFi protocols to large-scale blockchain games. Investing in BLC is investing in the infrastructure of tomorrow\'s decentralized web.',
