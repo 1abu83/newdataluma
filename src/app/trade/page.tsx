@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import { useState } from 'react';
@@ -33,7 +32,7 @@ export default function FuturesPage() {
         <div className="text-center">
           <h1 className="text-4xl font-bold">Futures Trading</h1>
           <p className="mt-4 text-muted-foreground">
-            This is the placeholder for the Futures trading page.
+            The Futures trading interface will be built here.
           </p>
         </div>
       </main>
