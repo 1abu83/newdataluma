@@ -1,3 +1,4 @@
+
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const crypto = require('crypto');
@@ -468,3 +469,45 @@ exports.loginOrSignup = functions.https.onRequest((req, res) => {
     }
   });
 });
+
+exports.createLaunchpadProject = functions.https.onRequest(async (req, res) => {
+    if (req.method === 'OPTIONS') {
+        return handleOptions(req, res);
+    }
+    cors(req, res, async () => {
+        if (req.method !== 'POST') {
+            return res.status(405).json({ error: 'Method not allowed' });
+        }
+        
+        // Basic validation
+        const requiredFields = [
+            'projectName', 'tagline', 'iconUrl', 'shortDescription', 'longDescription', 
+            'softCap', 'hardCap', 'presalePrice', 'totalSupply', 'creatorWallet'
+        ];
+        const missingField = requiredFields.find(field => !(field in req.body));
+        if (missingField) {
+            return res.status(400).json({ error: `Missing required field: ${missingField}` });
+        }
+
+        try {
+            const projectData = {
+                ...req.body,
+                status: 'pending_review', // Initial status
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+                participants: 0,
+                raisedAmount: 0,
+            };
+
+            const docRef = await db.collection('launchpad_projects').add(projectData);
+            
+            return res.status(200).json({ success: true, message: 'Project submitted successfully.', projectId: docRef.id });
+
+        } catch (error) {
+            console.error('Create Launchpad Project failed:', error);
+            return res.status(500).json({ error: error.message || 'Failed to create project' });
+        }
+    });
+});
+
+    
